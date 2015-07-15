@@ -1,0 +1,12 @@
+FROM icycrystal4/nginx:0.1
+
+MAINTAINER xiaokai.wang xiaokai@staff
+
+RUN mkdir -p /data/logs
+
+ADD wb.nginx.conf /data/wb.nginx.conf
+ADD mime.types /data/mime.types
+
+WORKDIR /data
+
+CMD "/usr/local/nginx/sbin/nginx" "-c" "/data/wb.nginx.conf"
