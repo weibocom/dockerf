@@ -1,8 +1,10 @@
 package cluster
 
 import (
+	"fmt"
 	"io/ioutil"
 
+	dutils "github.com/weibocom/dockerf/utils"
 	"gopkg.in/yaml.v2"
 )
 
@@ -13,20 +15,58 @@ type OS struct {
 }
 
 type Disk struct {
-	Ssd  string
-	Sata string
-	Sas  string
+	Type     string
+	Capacity string
 }
 
 type MachineDescription struct {
-	MaxNum  int
-	MinNum  int
-	Os      OS
-	Cpu     int
-	Disk    Disk
-	Memory  string
-	Init    string
-	Regions map[string]int
+	MaxNum     int
+	MinNum     int
+	Cpu        int
+	Disk       Disk
+	Memory     string
+	Init       string
+	Region     string
+	Consul     bool
+	DriverOpts []string
+}
+
+func (md *MachineDescription) GetCpu() int {
+	if md.Cpu <= 0 {
+		return 1
+	}
+	return md.Cpu
+}
+
+func (md *MachineDescription) GetMemInBytes() int {
+	if md.Memory == "" {
+		return 512 * 1024 * 1024 // default is 512m
+	}
+	if bytes, err := dutils.ParseCapacity(md.Memory); err != nil {
+		panic(fmt.Sprintf("'%s' is not a valid memory option.", md.Memory))
+	} else {
+		return bytes
+	}
+}
+
+func (md *MachineDescription) GetDiskCapacityInBytes() int {
+	if md.Disk.Capacity == "" {
+		return 20 * 1024 * 1024 * 1024 // default is 10gb
+	}
+	if bytes, err := dutils.ParseCapacity(md.Disk.Capacity); err != nil {
+		panic(fmt.Sprintf("'%s' is not a valid ssd capacity option.", md.Disk.Capacity))
+	} else {
+		return bytes
+	}
+}
+
+type MachineCluster struct {
+	OS       OS
+	Topology map[string]MachineDescription
+}
+
+type ContainerCluster struct {
+	Topology map[string]ContainerDescription
 }
 
 type ContainerDescription struct {
@@ -40,7 +80,9 @@ type ContainerDescription struct {
 	Deps            []string
 	ServiceDiscover string
 	Restart         bool
+	Machine         string
 	PortBinding     PortBinding
+	Volums          []string
 }
 
 type ConsulServer struct {
@@ -75,12 +117,12 @@ type Cluster struct {
 	DriverOptions []string
 	Discovery     string
 
-	Machine    MachineDescription
-	Containers []ContainerDescription
+	Machine   MachineCluster
+	Container ContainerCluster
+	// Containers []ContainerDescription
 
-	ServiceDiscovers map[string]ServiceDiscoverDiscription
-
-	ConsulCluster ConsulDescription
+	ServiceDiscover map[string]ServiceDiscoverDiscription
+	ConsulCluster   ConsulDescription
 }
 
 func NewCluster(configFilePos string) (*Cluster, error) {

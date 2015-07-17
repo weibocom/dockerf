@@ -12,7 +12,7 @@ const (
 
 type MachineName struct {
 	Prefix string
-	Seq    uint
+	Seq    int
 	Valid  bool
 }
 
@@ -29,7 +29,7 @@ func (mn *MachineName) Parse(name string) bool {
 		seq, err := strconv.ParseInt(numStr, 10, 32)
 		if err == nil {
 			mn.Prefix = prefix
-			mn.Seq = uint(seq)
+			mn.Seq = int(seq)
 			mn.Valid = true
 			return mn.Valid
 		}

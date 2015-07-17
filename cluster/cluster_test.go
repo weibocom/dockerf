@@ -14,12 +14,12 @@ func TestNewCluster(t *testing.T) {
 	fmt.Printf("Cluster Parsed:\n%+v", cluster)
 }
 
-func TestContainerPort(t *testing.T) {
-	var port ContainerPort
-	port = "~20000:456"
-	hp, cp, err := port.GetPorts()
-	if err != nil {
-		t.Errorf("%d, %d, %s\n", hp, cp, err.Error())
-	}
-	t.Logf("%d, %d\n", hp, cp)
-}
+// func TestContainerPort(t *testing.T) {
+// 	var port ContainerPort
+// 	port = "~20000:456"
+// 	hp, cp, err := port.GetPorts()
+// 	if err != nil {
+// 		t.Errorf("%d, %d, %s\n", hp, cp, err.Error())
+// 	}
+// 	t.Logf("%d, %d\n", hp, cp)
+// }
