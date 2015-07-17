@@ -73,8 +73,6 @@ func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 	flScaleIn := fs.Bool([]string{"-scale-in"}, false, "Destroy extra num of machines, where extra-num is active machines minus necessaries in cluster.yml")
 	flScaleOut := fs.Bool([]string{"-scale-out"}, false, "Create extra num of machines, where extra-num is necessary machines minus actives in cluster.yml")
 	flResize := fs.Bool([]string{"-resize"}, false, "Set the num of machines exactly equal with necessaries in cluster.yml . --scale-in --scaleout")
-	flForceCreate := fs.Bool([]string{"-force-create"}, false, "Create new machines, if stopped machines start failed.")
-	flPrefix := fs.String([]string{"-prefix"}, "node", "Prefix of creating new machine names.")
 	fs.Parse(args)
 
 	if len(fs.Args()) != 1 {
@@ -92,7 +90,7 @@ func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 	path := fs.Args()[0]
 	cluster := buildCluster(*flFile, path)
 
-	context := dcontext.NewClusterContext(*flScaleIn, *flScaleOut, *flRemove, *flForceCreate, &flCFilter, cluster, *flPrefix, ccli.dockerfCli.CmdContainer, ccli.dockerfCli.CmdMachine)
+	context := dcontext.NewClusterContext(*flScaleIn, *flScaleOut, *flRemove, &flCFilter, cluster, ccli.dockerfCli.CmdContainer, ccli.dockerfCli.CmdMachine)
 
 	context.Deploy()
 

@@ -2,10 +2,10 @@ package machine
 
 import (
 	"fmt"
-	"net/url"
-	"strings"
 
-	dutils "github.com/weibocom/dockerf/utils"
+	dcluster "github.com/weibocom/dockerf/cluster"
+	dopts "github.com/weibocom/dockerf/machine/opts"
+	dseq "github.com/weibocom/dockerf/sequence"
 )
 
 type MachineClusterProxy struct {
@@ -18,6 +18,7 @@ type MachineClusterProxy struct {
 	NoneOptions   []string
 	Proxy         *MachineProxy
 	Name          string
+	seqs          map[string]*dseq.Seq
 }
 
 func NewMachineClusterProxy(name, clusterBy, driver, discovery, master string, driverOptions []string) *MachineClusterProxy {
@@ -34,7 +35,9 @@ func NewMachineClusterProxy(name, clusterBy, driver, discovery, master string, d
 		NoneOptions:   nOpts,
 		Proxy:         mp,
 		Name:          name,
+		seqs:          map[string]*dseq.Seq{},
 	}
+	mcp.initSequences()
 	return mcp
 }
 
@@ -55,6 +58,32 @@ func GetOptions(clusterBy, driver, discovery string, driverOptions []string) ([]
 	return masterOptions, slaveOptions, noneOptions
 }
 
+func (mp *MachineClusterProxy) initSequences() {
+	mifs, err := mp.List()
+	if err != nil {
+		fmt.Printf("Failed to init machine group sequence. err:%s\n", err.Error())
+
+		return
+	}
+	for _, mi := range mifs {
+		mn := MachineName{}
+		if mn.Parse(mi.Name) {
+			seq := mp.getSeq(mn.Prefix)
+			seq.Max(mn.Seq)
+		}
+	}
+}
+
+func (mp *MachineClusterProxy) getSeq(group string) *dseq.Seq {
+	if seq, ok := mp.seqs[group]; ok {
+		return seq
+	} else {
+		seq := &dseq.Seq{}
+		mp.seqs[group] = seq
+		return seq
+	}
+}
+
 func (mp *MachineClusterProxy) IP(machine string) (string, error) {
 	return mp.Proxy.IP(machine)
 }
@@ -67,20 +96,40 @@ func (mp *MachineClusterProxy) CreateMaster() error {
 	return mp.Proxy.Create(mp.Master, mp.MasterOptions...)
 }
 
-func (mp *MachineClusterProxy) CreateSlave(nodeName string) error {
-	return mp.Proxy.Create(nodeName, mp.SlaveOptions...)
+func (mp *MachineClusterProxy) generateName(group string) string {
+	seq := mp.getSeq(group)
+	mn := MachineName{
+		Prefix: group,
+		Seq:    seq.Next(),
+	}
+	return mn.GetName()
 }
 
-func (mp *MachineClusterProxy) CreateMachine(nodeName string, opts ...string) error {
-	cOptions := []string{}
+func (mp *MachineClusterProxy) CreateSlave(group string, md dcluster.MachineDescription) (string, error) {
+	nodeName := mp.generateName(group)
+	opts := []string{"--engine-label", "group=" + group}
+	opts = append(opts, mp.SlaveOptions...)
+	extOpts, err := dopts.GetOptions(mp.Driver, md)
+	if err != nil {
+		return "", err
+	}
+	if len(extOpts) > 0 {
+		opts = append(opts, extOpts...)
+	}
+	return nodeName, mp.Proxy.Create(nodeName, opts...)
+}
+
+func (mp *MachineClusterProxy) CreateMachine(group string, opts ...string) error {
+	cOptions := []string{"--engine-label", "group=" + group}
 	cOptions = append(cOptions, mp.NoneOptions...)
 	if len(opts) > 0 {
 		cOptions = append(cOptions, opts...)
 	}
+	nodeName := mp.generateName(group)
 	return mp.Proxy.Create(nodeName, cOptions...)
 }
 
-func (mp *MachineClusterProxy) Start(names ...string) ([]string, []error) {
+func (mp *MachineClusterProxy) Start(names ...string) ([]string, error) {
 	return mp.Proxy.Start(names...)
 }
 
@@ -100,19 +149,23 @@ func (mp *MachineClusterProxy) Destroy(names ...string) error {
 	return mp.Proxy.Destroy(names...)
 }
 
+func (mp *MachineClusterProxy) ListByGroup(group string) ([]MachineInfo, error) {
+	clusterFilter := func(mi *MachineInfo) bool {
+		if mi.Master != mp.Master {
+			return false
+		}
+		mn := MachineName{}
+		if !mn.Parse(mi.Name) {
+			return false
+		}
+		return mn.Prefix == group
+	}
+	return mp.Proxy.List(clusterFilter)
+}
+
 func (mp *MachineClusterProxy) List() ([]MachineInfo, error) {
 	clusterFilter := func(mi *MachineInfo) bool {
 		return mi.Master == mp.Master
 	}
 	return mp.Proxy.List(clusterFilter)
-}
-
-//解析machine ip，machine url格式：tcp://192.168.99.100:2376
-func parseMachineIpFromUrl(machineUrl string) (string, error) {
-	u, err := url.Parse(machineUrl)
-	if err != nil {
-		dutils.Error(fmt.Sprintf("Invalid machine url, url: %s, error: %s", machineUrl, err.Error()))
-		return "", err
-	}
-	return strings.Split(u.Host, ":")[0], nil
 }

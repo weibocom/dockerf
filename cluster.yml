@@ -1,47 +1,67 @@
 clusterby: swarm
 masternode: master-node
-discovery: consul://192.168.99.110:8500/testicy
+discovery: consul://192.168.99.101:8500/testicy
 driver: virtualbox
 driveroptions:
    - --engine-insecure-registry
    - 192.168.99.100:5000
    - --swarm-image
-   - 192.168.99.100:5000/icycrystal4/swarm:0711
+   - 192.168.99.100:5000/icycrystal4/swarm
 
 machine:
-    minnum: 2
-    maxnum: 2
     os: 
        provider: ubuntu 
        bits: 64
        version: 14.04
-    init: touch ~/hello
-    cpu: 3
-    disk: 
-       ssd: 200g
-    memory: 512m
-    regions:
-      BJ: 100   # percentage that num of machine at this regions
-      TJ: 0
+    topology:
+       frontend:
+          minnum: 1
+          maxnum: 1
+          cpu: 1
+          memory: 1g
+          disk:
+             type: ssd
+             capacity: 10240m
+          region: bj-dc1
+          init: touch ~/hello
+          driveropts:
+          consul: false
+       nginx:
+          minnum: 1
+          maxnum: 1
+          cpu: 1
+          memory: 512m
+          disk:
+             type: ssd
+             capacity: 20g
+          region: bj-dc1
+          init: touch ~/hello
+          driveropts:
+          consul: true
 
-containers:
-    - name: webnginx
-      port: 8408:8408
-      num: 1
-      image: 192.168.99.100:5000/icycrystal4/wb-nginx:0.6
-      restart: false
-      url: nginx.testservice
+container:
+   topology:
+       webnginx:
+         port: 8408:8408
+         num: 1
+         image: 192.168.99.100:5000/icycrystal4/discover-nginx:0.8
+         restart: false
+         url: if.nginx
+         machine: nginx
+         volums:
+            - /var:/var
 
-    - name: web
-      port: 40000~50000:8080
-      num: 1
-      image: 192.168.99.100:5000/icycrystal4/tomcat:latest
-      prestop: touch ~/503  # execute some shell commands on the machine, not in container, before stop the service 
-      poststart: touch ~/200
-      restart: false
-      servicediscover: webnginx
+       web:
+         port: 40000~50000:8080
+         num: 1
+         image: 192.168.99.100:5000/icycrystal4/tomcat:latest
+         prestop: touch ~/503  # execute some shell commands on the machine, not in container, before stop the service 
+         poststart: touch ~/200
+         restart: true
+         servicediscover: webnginx
+         machine: frontend
 
-servicediscovers:
+servicediscover:
   webnginx:
     driver: nginx
     upstream: discover
@@ -53,7 +73,7 @@ consulcluster:
       image: 192.168.99.100:5000/icycrystal4/progrium-consul:latest
       domain: weibo
       ips: 
-         - 192.168.99.110
+         - 192.168.99.101
       nodes:
          # - consulserver-boot
          # - consulcluster-2

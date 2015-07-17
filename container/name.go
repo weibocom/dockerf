@@ -10,7 +10,7 @@ type ContainerName struct {
 	Valid bool
 	Node  string
 	Group string
-	Seq   uint
+	Seq   int
 }
 
 func (cng *ContainerName) Parse(cName string) bool {
@@ -45,7 +45,7 @@ func (cng *ContainerName) Parse(cName string) bool {
 	}
 	cng.Node = node
 	cng.Group = group
-	cng.Seq = uint(seq)
+	cng.Seq = int(seq)
 	cng.Valid = true
 	return cng.Valid
 }

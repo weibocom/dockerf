@@ -14,7 +14,6 @@ type MachineInfo struct {
 	URL       string
 	IP        string
 	TlsConfig tls.Config
-	A         string
 }
 
 func (mi *MachineInfo) IsMaster() bool {

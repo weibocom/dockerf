@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -50,13 +51,13 @@ func (mp *MachineProxy) Create(name string, options ...string) error {
 	return mp.Run(args...)
 }
 
-func (mp *MachineProxy) Start(names ...string) ([]string, []error) {
+func (mp *MachineProxy) Start(names ...string) ([]string, error) {
 	l := len(names)
 	if l == 0 {
 		return []string{}, nil
 	}
 	successMachineNames := []string{}
-	errs := []error{}
+	errs := []string{}
 	var wg sync.WaitGroup
 	wg.Add(l)
 	for _, name := range names {
@@ -65,7 +66,7 @@ func (mp *MachineProxy) Start(names ...string) ([]string, []error) {
 			args := []string{"start", nm}
 			err := mp.Run(args...)
 			if err != nil {
-				errs = append(errs, err)
+				errs = append(errs, err.Error())
 				fmt.Printf("Machine(%s) start failed:%s\n", name, err.Error())
 			} else {
 				successMachineNames = append(successMachineNames, nm)
@@ -74,7 +75,11 @@ func (mp *MachineProxy) Start(names ...string) ([]string, []error) {
 		}(name)
 	}
 	wg.Wait()
-	return successMachineNames, errs
+	var err error = nil
+	if len(errs) > 0 {
+		err = errors.New(strings.Join(errs, "---"))
+	}
+	return successMachineNames, err
 }
 
 func (mp *MachineProxy) ExecCmd(machine, command string) error {
@@ -234,4 +239,14 @@ func (mp *MachineProxy) List(filter func(mi *MachineInfo) bool) ([]MachineInfo, 
 		}
 	}
 	return mis, nil
+}
+
+//解析machine ip，machine url格式：tcp://192.168.99.100:2376
+func parseMachineIpFromUrl(machineUrl string) (string, error) {
+	u, err := url.Parse(machineUrl)
+	if err != nil {
+		dutils.Error(fmt.Sprintf("Invalid machine url, url: %s, error: %s", machineUrl, err.Error()))
+		return "", err
+	}
+	return strings.Split(u.Host, ":")[0], nil
 }
