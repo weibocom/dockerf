@@ -267,43 +267,43 @@
 		},
 		{
 			"ImportPath": "github.com/docker/machine/commands",
-			"Comment": "v0.3.0",
-			"Rev": "0a251fe434d868165cca28200ffd71f16abb5c10"
+			"Comment": "v0.3.0-2-g0c7e2fb",
+			"Rev": "0c7e2fbd1c725058a97d36bb47ac793698a84b2f"
 		},
 		{
 			"ImportPath": "github.com/docker/machine/drivers",
-			"Comment": "v0.3.0",
-			"Rev": "0a251fe434d868165cca28200ffd71f16abb5c10"
+			"Comment": "v0.3.0-2-g0c7e2fb",
+			"Rev": "0c7e2fbd1c725058a97d36bb47ac793698a84b2f"
 		},
 		{
 			"ImportPath": "github.com/docker/machine/libmachine",
-			"Comment": "v0.3.0",
-			"Rev": "0a251fe434d868165cca28200ffd71f16abb5c10"
+			"Comment": "v0.3.0-2-g0c7e2fb",
+			"Rev": "0c7e2fbd1c725058a97d36bb47ac793698a84b2f"
 		},
 		{
 			"ImportPath": "github.com/docker/machine/log",
-			"Comment": "v0.3.0",
-			"Rev": "0a251fe434d868165cca28200ffd71f16abb5c10"
+			"Comment": "v0.3.0-2-g0c7e2fb",
+			"Rev": "0c7e2fbd1c725058a97d36bb47ac793698a84b2f"
 		},
 		{
 			"ImportPath": "github.com/docker/machine/ssh",
-			"Comment": "v0.3.0",
-			"Rev": "0a251fe434d868165cca28200ffd71f16abb5c10"
+			"Comment": "v0.3.0-2-g0c7e2fb",
+			"Rev": "0c7e2fbd1c725058a97d36bb47ac793698a84b2f"
 		},
 		{
 			"ImportPath": "github.com/docker/machine/state",
-			"Comment": "v0.3.0",
-			"Rev": "0a251fe434d868165cca28200ffd71f16abb5c10"
+			"Comment": "v0.3.0-2-g0c7e2fb",
+			"Rev": "0c7e2fbd1c725058a97d36bb47ac793698a84b2f"
 		},
 		{
 			"ImportPath": "github.com/docker/machine/utils",
-			"Comment": "v0.3.0",
-			"Rev": "0a251fe434d868165cca28200ffd71f16abb5c10"
+			"Comment": "v0.3.0-2-g0c7e2fb",
+			"Rev": "0c7e2fbd1c725058a97d36bb47ac793698a84b2f"
 		},
 		{
 			"ImportPath": "github.com/docker/machine/version",
-			"Comment": "v0.3.0",
-			"Rev": "0a251fe434d868165cca28200ffd71f16abb5c10"
+			"Comment": "v0.3.0-2-g0c7e2fb",
+			"Rev": "0c7e2fbd1c725058a97d36bb47ac793698a84b2f"
 		},
 		{
 			"ImportPath": "github.com/google/go-querystring/query",
