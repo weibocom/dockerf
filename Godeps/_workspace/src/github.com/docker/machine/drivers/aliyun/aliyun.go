@@ -312,9 +312,12 @@ func (d *Driver) PreCreateCheck() error {
 
 func (d *Driver) Create() error {
 	// Create SSH key
+	log.Debugf("Creating ssh key --- \n")
 	if err := d.createSSHKey(); err != nil {
 		return err
 	}
+
+	return nil
 
 	// Create instance
 	log.Info("Creating ECS instance...")
@@ -532,8 +535,9 @@ func (d *Driver) createSSHKey() error {
 	if err != nil {
 		return err
 	}
-	d.PublicKey = publicKey
-	log.Debug(publicKey)
+	d.PublicKey = publicKey[0 : len(publicKey)-1]
+	log.Debugf("------------%s\n")
+	log.Debug(string(publicKey))
 
 	return nil
 }
@@ -588,10 +592,11 @@ func (d *Driver) uploadKeyPair() error {
 	if err != nil {
 		return err
 	}
-
-	command := fmt.Sprintf("mkdir -p ~/.ssh; echo '%s' > ~/.ssh/authorized_keys", string(d.PublicKey))
+	pk := d.PublicKey[0 : len(d.PublicKey)-1]
+	log.Debugf("upload --- command...")
+	command := fmt.Sprintf("mkdir -p ~/.ssh; echo '%s' > ~/.ssh/authorized_keys", string(pk))
 	output, err := sshCli.Output(command)
-	log.Debugf("upload command: %s", command)
+
 	log.Debugf("upload public key with err, output: %v: %s", err, output)
 
 	if err != nil {

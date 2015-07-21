@@ -36,15 +36,15 @@ func init() {
 type ClusterContext struct {
 	create            bool
 	clusterDesc       *dcluster.Cluster
-	scaleIn           bool
-	scaleOut          bool
-	removeContainer   bool
+	mScaleIn          bool
+	mScaleOut         bool
+	cScaleIn          bool
+	cScaleOut         bool
+	rmc               bool
 	forceCreate       bool
 	filters           *opts.ListOpts
 	machineInfos      []dmachine.MachineInfo
 	containerInfos    []dcontainer.ContainerInfo
-	CmdContainer      func(args ...string) error
-	CmdMachine        func(args ...string) error
 	mSeq              sequence.Seq
 	cSeqs             map[string]*sequence.Seq
 	mProxy            *dmachine.MachineClusterProxy
@@ -52,16 +52,16 @@ type ClusterContext struct {
 	serviceRegistries map[string]*discovery.ServiceRegisterDriver
 }
 
-func NewClusterContext(scaleIn, scaleOut, rmc bool, cFilter *opts.ListOpts, cluster *dcluster.Cluster, cmdContainer, cmdMachine func(args ...string) error) *ClusterContext {
+func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilter *opts.ListOpts, cluster *dcluster.Cluster) *ClusterContext {
 	clusterContext := &ClusterContext{
 		create:            true,
 		clusterDesc:       cluster,
 		filters:           cFilter,
-		scaleIn:           scaleIn,
-		scaleOut:          scaleOut,
-		removeContainer:   rmc,
-		CmdContainer:      cmdContainer,
-		CmdMachine:        cmdMachine,
+		mScaleIn:          mScaleIn,
+		mScaleOut:         mScaleOut,
+		cScaleIn:          cScaleIn,
+		cScaleOut:         cScaleout,
+		rmc:               rmc,
 		machineInfos:      []dmachine.MachineInfo{},
 		containerInfos:    []dcontainer.ContainerInfo{},
 		mSeq:              sequence.Seq{},
@@ -89,7 +89,7 @@ func (ctx *ClusterContext) initContext() {
 	}
 	ctx.machineInfos = mis
 
-	fmt.Printf("Init machine master\n")
+	fmt.Printf("Starting machine master\n")
 	if err := ctx.startMaster(); err != nil {
 		panic("Start cluster master failed: " + err.Error())
 	}
@@ -113,12 +113,15 @@ func (ctx *ClusterContext) initContext() {
 	fmt.Println("Init the named machine sequence...")
 	ctx.initMachineSequence(mis)
 
-	cifs, err := ctx.cProxy.ListAll()
-	fmt.Printf("Init the named container sequences... total containers:%d\n", len(cifs))
-	if err != nil {
+	fmt.Printf("Loading all filtered container infos")
+	if err := ctx.loadContainers(); err != nil {
 		panic("Init cluster context error, cannot list container infos:" + err.Error())
 	}
-	ctx.initContainerSequences(cifs)
+
+	fmt.Printf("Init container sequences.\n")
+	if err := ctx.initContainerSequences(); err != nil {
+		panic("Init cluster context error, cannot init container seqs:" + err.Error())
+	}
 
 	fmt.Println("cluster context inited successfully")
 }
@@ -142,6 +145,24 @@ func (ctx *ClusterContext) loadContainers() error {
 		ctx.containerInfos = infos
 	}
 	return err
+}
+
+func (ctx *ClusterContext) loadAllContainers() ([]dcontainer.ContainerInfo, error) {
+	return ctx.cProxy.ListAll()
+}
+
+func (ctx *ClusterContext) loadContainerByGroup(group string) []dcontainer.ContainerInfo {
+	return ctx.getContainerByGroup(group)
+}
+
+func (ctx *ClusterContext) getContainerByGroup(group string) []dcontainer.ContainerInfo {
+	infos := []dcontainer.ContainerInfo{}
+	for _, info := range ctx.containerInfos {
+		if info.Group == group {
+			infos = append(infos, info)
+		}
+	}
+	return infos
 }
 
 func (ctx *ClusterContext) initServiceDiscovery(cinfos []dcontainer.ContainerInfo) error {
@@ -256,8 +277,15 @@ func (ctx *ClusterContext) reloadMachineInfos() error {
 	return err
 }
 
-func (ctx *ClusterContext) initContainerSequences(cifs []dcontainer.ContainerInfo) {
-
+func (ctx *ClusterContext) initContainerSequences() error {
+	cifs := ctx.containerInfos
+	if len(ctx.filters.GetAll()) > 0 {
+		aCifs, err := ctx.loadAllContainers()
+		if err != nil {
+			return err
+		}
+		cifs = aCifs
+	}
 	cn := dcontainer.ContainerName{}
 	for _, ci := range cifs {
 		cName := ci.Name[0]
@@ -276,6 +304,7 @@ func (ctx *ClusterContext) initContainerSequences(cifs []dcontainer.ContainerInf
 		}
 	}
 	fmt.Printf("Named Container info sequences inited:%+v\n", ctx.cSeqs)
+	return nil
 }
 
 func (ctx *ClusterContext) initMachineSequence(mifs []dmachine.MachineInfo) {
@@ -522,7 +551,7 @@ func (ctx *ClusterContext) createSlaves(group string, md dcluster.MachineDescrip
 }
 
 func (ctx *ClusterContext) scaleMachineIn() error {
-	if !ctx.scaleIn {
+	if !ctx.mScaleIn {
 		fmt.Printf("No need to scale in.\n")
 		return nil
 	}
@@ -597,7 +626,9 @@ func (ctx *ClusterContext) nextContainerName(group string) string {
 	return cn.GetName()
 }
 
-func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, name string) error {
+func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, group string) {
+	name := ctx.nextContainerName(group)
+	fmt.Printf("Run a new container. name:%s, image:%s, group:%s.\n", name, cd.Image, group)
 	envs := []string{"constraint:role==slave", "constraint:group==" + cd.Machine}
 	if cd.URL != "" {
 		url := cd.URL
@@ -621,131 +652,173 @@ func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, name 
 	cid, err := ctx.cProxy.RunByConfig(runConfig)
 
 	if err != nil {
-		return errors.New(fmt.Sprintf("Failed to run a container. name: %s, error: %s", name, err.Error()))
+		panic(fmt.Sprintf("Failed to run a container. name: %s, error: %s", name, err.Error()))
 	}
-	return ctx.registerServiceByContainerId(cid, cd)
+	err = ctx.registerServiceByContainerId(cid, cd)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to register service of container. id:%s, description:%+v err:%s", cid, *cd, err.Error()))
+	}
+}
+
+func (ctx *ClusterContext) removeStoppedContainerByGroup(group string) {
+	if !ctx.rmc {
+		fmt.Printf("No need to remove stopped container of group '%s'\n", group)
+		return
+	}
+	containers := ctx.loadContainerByGroup(group)
+	var wg sync.WaitGroup
+	for _, c := range containers {
+		if c.IsUp() {
+			continue
+		}
+		wg.Add(1)
+		fmt.Printf("Remove an container: container id: %s name:%s\n", c.ID, c.Name[0])
+
+		go func(c *dcontainer.ContainerInfo) {
+			defer wg.Done()
+			if err := ctx.cProxy.RemoveContainer(c.ID); err != nil {
+				fmt.Printf("Failed to remove an container. cid:%s, name:%s, Error:%s\n", c.ID, c.Name[0], err.Error())
+			} else {
+				fmt.Printf("Successfully to remove an container. cid:%s, name:%s. %s\n", c.ID, c.Name[0])
+			}
+		}(&c)
+	}
+	wg.Wait()
+}
+
+func (ctx *ClusterContext) stopContainer(c *dcontainer.ContainerInfo, description *dcluster.ContainerDescription) {
+	cid := c.ID
+	cName := c.Name[0]
+	if len(c.IpPorts) > 0 {
+		ip := c.IpPorts[0].IP
+		port := c.IpPorts[0].PublicPort
+		fmt.Printf("Unregister service before stop a container. cid:%s, name: %s, ip:%s, port:%d\n", cid, cName, ip, port)
+		if err := ctx.unregisterService(ip, port, description); err != nil {
+			panic(fmt.Sprintf("Failed to unregister container service. cid:%s, name: %s, ip:%s, port:%d. Error:%s\n", cid, cName, ip, port, err.Error()))
+		}
+	}
+	fmt.Printf("Container unregistered, begin to stop an container: container id: %s\n", cid)
+	if err := ctx.cProxy.StopContainer(cid); err != nil {
+		panic(fmt.Sprintf("Failed to stop container. CID:%s, name:%s, Error:%s", cid, cName, err.Error()))
+	}
+	fmt.Printf("Container stopped securely and successfully. name:%s, container id: %s\n", cName, cid)
+}
+
+func (ctx *ClusterContext) startContainer(container *dcontainer.ContainerInfo, description *dcluster.ContainerDescription) {
+	fmt.Printf("Restarting container. cid:%s, image:%s, name:%s\n", container.ID, container.Image, container.Name[0])
+	if err := ctx.cProxy.RestartContainer(container.ID); err != nil {
+		panic(fmt.Sprintf("Failed to restart container.  cid:%s, image:%s, name:%s, err:%s\n", container.ID, container.Image, container.Name[0], err.Error()))
+	}
+	fmt.Printf("Container restarted, begin to register. cid:%s, image:%s, name:%s\n", container.ID, container.Image, container.Name[0])
+	if err := ctx.registerServiceByContainer(container, description); err != nil {
+		panic(fmt.Sprintf("Service Register failed. name:%s, error:%s\n", container.Name[0], err.Error()))
+	}
+	fmt.Printf("Container successfully. cid:%s, image:%s, name:%s\n", container.ID, container.Image, container.Name[0])
+}
+
+func (ctx *ClusterContext) deployRunningContainersByDescription(group string, description *dcluster.ContainerDescription) error {
+	var wg sync.WaitGroup
+	containers := ctx.getContainerByGroup(group)
+	for _, c := range containers {
+		if !c.IsUp() {
+			continue
+		}
+		if c.Image == description.Image && !description.Restart {
+			continue
+		}
+		wg.Add(1)
+		go func(c dcontainer.ContainerInfo, ctx *ClusterContext) {
+			defer wg.Done()
+			ctx.stopContainer(&c, description)
+			if c.Image == description.Image {
+				ctx.startContainer(&c, description) // just restart
+			} else {
+				ctx.runContainer(description, group)
+			}
+
+		}(c, ctx)
+	}
+	wg.Wait()
+	return nil
+}
+
+func (ctx *ClusterContext) scaleOutContainersByDescription(group string, description *dcluster.ContainerDescription) error {
+	if !ctx.cScaleOut {
+		fmt.Printf("--scale-out is set to false(not set), not need to scale container out for group '%s'.\n", group)
+	}
+	containers := ctx.getContainerByGroup(group)
+	running := 0
+	for _, c := range containers {
+		if c.IsUp() {
+			running++
+		}
+	}
+	createNum := description.Num - running
+	if createNum <= 0 {
+		fmt.Printf("No need to scale out container for group '%s'. running:%d, need:%d\n", group, running, description.Num)
+		return nil
+	}
+	fmt.Printf("%d container will be created and run of group '%s'.\n", createNum, group)
+
+	var wg sync.WaitGroup
+	for i := 0; i < createNum; i++ {
+		wg.Add(1)
+		go func(group string, cd *dcluster.ContainerDescription) {
+			defer wg.Done()
+			ctx.runContainer(cd, group)
+		}(group, description)
+	}
+	wg.Wait()
+	return nil
+}
+
+func (ctx *ClusterContext) scaleInContainersByDescription(group string, description *dcluster.ContainerDescription) error {
+	if !ctx.cScaleIn {
+		fmt.Printf("--scale-in is set to false(not set), not need to scale container out for group '%s'.\n", group)
+	}
+	containers := ctx.getContainerByGroup(group)
+	running := 0
+	for _, c := range containers {
+		if c.IsUp() {
+			running++
+		}
+	}
+	needStopped := running - description.Num
+	if needStopped <= 0 {
+		fmt.Printf("No need to scale in container for group '%s'. running:%d, need:%d\n", group, running, description.Num)
+		return nil
+	}
+	fmt.Printf("%d container will be stopped of group '%s'.\n", needStopped, group)
+
+	var wg sync.WaitGroup
+	stopped := 0
+	for _, c := range containers {
+		if !c.IsUp() {
+			continue
+		}
+		if stopped >= needStopped {
+			break
+		}
+		stopped++
+		wg.Add(1)
+		go func(group string, cd *dcluster.ContainerDescription) {
+			defer wg.Done()
+			ctx.stopContainer(&c, description)
+		}(group, description)
+	}
+	wg.Wait()
+	return nil
 }
 
 func (ctx *ClusterContext) deployContainersByDescription(group string, description *dcluster.ContainerDescription) error {
-	stop := func(c *dcontainer.ContainerInfo, ctx *ClusterContext) {
-		cid := c.ID
-		cName := c.Name[0]
-		if len(c.IpPorts) > 0 {
-			ip := c.IpPorts[0].IP
-			port := c.IpPorts[0].PublicPort
-			fmt.Printf("Unregister service before stop a container. cid:%s, name: %s, ip:%s, port:%d\n", cid, cName, ip, port)
-			if err := ctx.unregisterService(ip, port, description); err != nil {
-				panic(fmt.Sprintf("Failed to unregister container service. cid:%s, name: %s, ip:%s, port:%d. Error:%s\n", cid, cName, ip, port, err.Error()))
-			}
-		}
-		fmt.Printf("Container unregistered, begin to stop an container: container id: %s\n", cid)
-		if err := ctx.cProxy.StopContainer(cid); err != nil {
-			panic(fmt.Sprintf("Failed to stop container. CID:%s, name:%s, Error:%s", cid, cName, err.Error()))
-		}
-		fmt.Printf("Container stopped securely and successfully. name:%s, container id: %s\n", cName, cid)
-	}
+	ctx.deployRunningContainersByDescription(group, description)
 
-	remove := func(c *dcontainer.ContainerInfo, ctx *ClusterContext) {
-		cid := c.ID
-		name := c.Name[0]
-		fmt.Printf("Remove an container: container id: %s\n", cid)
-		if err := ctx.cProxy.RemoveContainer(cid); err != nil {
-			fmt.Printf("Failed to remove an container. cid:%s, name:%s, Error:%s\n", cid, name, err.Error())
-		}
-	}
+	ctx.scaleOutContainersByDescription(group, description)
 
-	run := func(name string, description *dcluster.ContainerDescription, ctx *ClusterContext) {
-		fmt.Printf("Run a new container. name:%s, image:%s, group:%s.\n", name, description.Image, description.Name)
-		err := ctx.runContainer(description, name)
-		if err != nil {
-			panic(fmt.Sprintf("Can not run an container. name:%s, image:%s, group:%s. err:%s", name, description.Image, description.Name, err.Error()))
-		}
-		fmt.Printf("A new container running. name:%s, image:%s, group:%s.\n", name, description.Image, description.Name)
-	}
+	ctx.scaleInContainersByDescription(group, description)
 
-	restart := func(container *dcontainer.ContainerInfo, description *dcluster.ContainerDescription, ctx *ClusterContext) {
-		fmt.Printf("Restarting container. cid:%s, image:%s, name:%s\n", container.ID, container.Image, container.Name[0])
-		if err := ctx.cProxy.RestartContainer(container.ID); err != nil {
-			panic(fmt.Sprintf("Failed to restart container.  cid:%s, image:%s, name:%s, err:%s\n", container.ID, container.Image, container.Name[0], err.Error()))
-		}
-		fmt.Printf("Container restarted, begin to register. cid:%s, image:%s, name:%s\n", container.ID, container.Image, container.Name[0])
-		if err := ctx.registerServiceByContainer(container, description); err != nil {
-			panic(fmt.Sprintf("Service Register failed. name:%s, error:%s\n", container.Name[0], err.Error()))
-		}
-		fmt.Printf("Container successfully. cid:%s, image:%s, name:%s\n", container.ID, container.Image, container.Name[0])
-	}
+	ctx.removeStoppedContainerByGroup(group)
 
-	var wg sync.WaitGroup
-
-	containers, err := ctx.cProxy.ListByGroup(group)
-	if err != nil {
-		panic("Cannot load containers of group '" + group + "'")
-	}
-
-	stopNum := 0
-	runNum := 0
-	expNum := description.Num
-	// process the stopped container
-	for _, c := range containers {
-		if !c.IsUp() {
-			stopNum++
-			if ctx.removeContainer {
-				wg.Add(1)
-				go func(c dcontainer.ContainerInfo, ctx *ClusterContext) {
-					defer wg.Done()
-					remove(&c, ctx)
-				}(c, ctx)
-			}
-		} else {
-			runNum++
-		}
-	}
-	wg.Wait()
-
-	// process the running container
-	for _, c := range containers {
-		if c.IsUp() {
-			if c.Image == description.Image && !description.Restart && runNum <= expNum {
-				continue
-			}
-			runNum-- // prepare to stop
-			rstart := c.Image == description.Image && runNum < expNum
-			wg.Add(1)
-			go func(c dcontainer.ContainerInfo, ctx *ClusterContext, rstart bool) {
-				defer wg.Done()
-				stop(&c, ctx)
-				if rstart {
-					restart(&c, description, ctx)
-					runNum++
-				} else {
-					if ctx.removeContainer {
-						remove(&c, ctx)
-					}
-				}
-			}(c, ctx, rstart)
-		}
-	}
-	wg.Wait()
-
-	left := expNum - runNum
-	fmt.Printf("%d Container of group '%s' is running , %d left container will be create and running.\n", runNum, group, left)
-
-	// create new container
-	if left > 0 {
-		for i := 0; i < left; i++ {
-			cd := description
-			cName := ctx.nextContainerName(group)
-			wg.Add(1)
-			fmt.Printf("Deploy a new container(image:%s, name:%s).\n", cd.Image, cName)
-			go func(image, name string, ctx *ClusterContext) {
-				defer wg.Done()
-				run(cName, cd, ctx)
-				runNum++
-			}(cd.Image, cName, ctx)
-		}
-		wg.Wait()
-	}
-	fmt.Printf("Container deployed for group '%s'. expect:%d started:%d.\n", group, expNum, runNum)
 	return nil
 }
 
@@ -865,6 +938,10 @@ func (ctx *ClusterContext) startMachines(group string, machines []dmachine.Machi
 		if end > len(stoppedNodes) {
 			end = len(stoppedNodes)
 		}
+		if start >= end {
+			break
+		}
+		fmt.Printf("nodes:%+v, start:%d, end:%d\n", stoppedNodes, start, end)
 		toBeStart := stoppedNodes[start:end]
 
 		if len(toBeStart) == 0 || running >= max {
@@ -930,7 +1007,7 @@ func (ctx *ClusterContext) scaleMachineOutByGroup(group string, md dcluster.Mach
 }
 
 func (ctx *ClusterContext) scaleMachineOut() error {
-	if !ctx.scaleOut {
+	if !ctx.mScaleOut {
 		fmt.Printf("No need to scale machine out.\n")
 		return nil
 	}

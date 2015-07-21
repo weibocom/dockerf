@@ -1,12 +1,12 @@
 clusterby: swarm
 masternode: master-node
-discovery: consul://192.168.99.101:8500/testicy
+discovery: consul://192.168.99.100:8500/testicy0721
 driver: virtualbox
 driveroptions:
    - --engine-insecure-registry
-   - 192.168.99.100:5000
+   - 192.168.99.101:5000
    - --swarm-image
-   - 192.168.99.100:5000/icycrystal4/swarm
+   - 192.168.99.101:5000/icycrystal4/swarm
 
 machine:
     os: 
@@ -44,7 +44,7 @@ container:
        webnginx:
          port: 8408:8408
          num: 1
-         image: 192.168.99.100:5000/icycrystal4/discover-nginx:0.8
+         image: 192.168.99.101:5000/icycrystal4/discover-nginx:0.8
          restart: false
          url: if.nginx
          machine: nginx
@@ -53,8 +53,8 @@ container:
 
        web:
          port: 40000~50000:8080
-         num: 1
-         image: 192.168.99.100:5000/icycrystal4/tomcat:latest
+         num: 2
+         image: 192.168.99.101:5000/icycrystal4/tomcat:latest
          prestop: touch ~/503  # execute some shell commands on the machine, not in container, before stop the service 
          poststart: touch ~/200
          restart: true
@@ -70,17 +70,17 @@ servicediscover:
 consulcluster:
    server:
       service: weibo
-      image: 192.168.99.100:5000/icycrystal4/progrium-consul:latest
+      image: 192.168.99.101:5000/icycrystal4/progrium-consul:latest
       domain: weibo
       ips: 
-         - 192.168.99.101
+         - 192.168.99.100
       nodes:
          # - consulserver-boot
          # - consulcluster-2
          # - consulcluster-3
       create: false
    agent:
-      image: 192.168.99.100:5000/icycrystal4/progrium-consul:latest
+      image: 192.168.99.101:5000/icycrystal4/progrium-consul:latest
    registrator:
-      image: 192.168.99.100:5000/icycrystal4/progrium-registrator
+      image: 192.168.99.101:5000/icycrystal4/progrium-registrator
 

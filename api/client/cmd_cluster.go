@@ -67,12 +67,17 @@ func (ccli *ClusterCli) Cmd(args ...string) error {
 func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 	fs := GetClusterSubCmdFlags("deploy", " PATH", "Deploy all containers on the cluster, which dedcriped by yaml file at PATH", true)
 	flFile := fs.String([]string{"f", "-file"}, "", "Name of the Cluster yaml file(Default is PATH/cluster.yml")
+
+	flMScaleIn := fs.Bool([]string{"-m-scale-in"}, false, "Destroy extra num of machines, where extra-num is active machines minus necessaries in cluster.yml")
+	flMScaleOut := fs.Bool([]string{"-m-scale-out"}, false, "Create extra num of machines, where extra-num is necessary machines minus actives in cluster.yml")
+
 	flCFilter := opts.NewListOpts(nil)
-	fs.Var(&flCFilter, []string{"-filter"}, "Filter containers to operate, basedd on conditions provided")
-	flRemove := fs.Bool([]string{"-rmc"}, true, "Remove the old container, when new container started")
-	flScaleIn := fs.Bool([]string{"-scale-in"}, false, "Destroy extra num of machines, where extra-num is active machines minus necessaries in cluster.yml")
-	flScaleOut := fs.Bool([]string{"-scale-out"}, false, "Create extra num of machines, where extra-num is necessary machines minus actives in cluster.yml")
-	flResize := fs.Bool([]string{"-resize"}, false, "Set the num of machines exactly equal with necessaries in cluster.yml . --scale-in --scaleout")
+	fs.Var(&flCFilter, []string{"-c-filter"}, "Filter containers to operate, basedd on conditions provided")
+	flCRemove := fs.Bool([]string{"-c-rm"}, true, "Remove the stopped containers.")
+	flCScaleIn := fs.Bool([]string{"-c-scale-in"}, false, "Stop extra num of containers, where extra-num is active machines minus necessaries in cluster.yml")
+	flCScaleOut := fs.Bool([]string{"-c-scale-out"}, false, "Run extra num of container, where extra-num is necessary machines minus actives in cluster.yml")
+	// flCForceRestart := fs.Bool([]string{"-c-force-restart"}, false, "Force restart an running container, when the image is eual with which configured in cluster.yml")
+
 	fs.Parse(args)
 
 	if len(fs.Args()) != 1 {
@@ -80,25 +85,12 @@ func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 		os.Exit(1)
 	}
 
-	checkResizeFlagConfict(flScaleIn, flScaleOut, flResize, fs)
-
-	if fs.IsSet("-resize") {
-		*flScaleIn = *flResize
-		*flScaleOut = *flResize
-	}
-
 	path := fs.Args()[0]
 	cluster := buildCluster(*flFile, path)
 
-	context := dcontext.NewClusterContext(*flScaleIn, *flScaleOut, *flRemove, &flCFilter, cluster, ccli.dockerfCli.CmdContainer, ccli.dockerfCli.CmdMachine)
+	context := dcontext.NewClusterContext(*flMScaleIn, *flMScaleOut, *flCScaleIn, *flCScaleOut, *flCRemove, &flCFilter, cluster)
 
-	context.Deploy()
-
-	return nil
-}
-
-func checkResizeFlagConfict(scaleIn, scaleOut, resize *bool, fs *flag.FlagSet) {
-
+	return context.Deploy()
 }
 
 func (ccli *ClusterCli) resizeMachine(context *dcontext.ClusterContext, cluster *dcluster.Cluster, scaleIn, scaleOut bool) error {

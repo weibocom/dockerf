@@ -99,33 +99,23 @@ func (mp *MachineProxy) IP(machine string) (string, error) {
 		fmt.Printf("Failed to load ip for '%s'\n", machine)
 		return "", err
 	}
-	ip := string(data)
-	ip = strings.Replace(ip, "\n", "", -1)
-	ip = strings.Replace(ip, "\r", "", -1)
+	lines := strings.Split(string(data), "\n")
+	l := len(lines)
+	if l < 2 {
+		return "", errors.New(fmt.Sprintf("Not a valid ip '%s'", string(data)))
+	}
+	ip := lines[l-2]
 	return ip, nil
 }
 
 func (mp *MachineProxy) IPs(nodes []string) ([]string, error) {
-	cmd := os.Args[0]
-	args := []string{"machine", "ip"}
-	args = append(args, nodes...)
-	data, err := exec.Command(cmd, args...).Output()
-	if err != nil {
-		fmt.Printf("Failed to load ips for '%s'\n", nodes)
-		return []string{}, err
-	}
 	ips := []string{}
-	ipLines := strings.NewReader(string(data))
-	br := bufio.NewReader(ipLines)
-	for {
-		if ip, _, err := br.ReadLine(); err == nil {
-			ips = append(ips, string(ip))
-		} else {
-			break
+	for _, n := range nodes {
+		ip, err := mp.IP(n)
+		if err != nil {
+			return []string{}, err
 		}
-	}
-	if len(ips) != len(nodes) {
-		return []string{}, errors.New(fmt.Sprintf("Failed to load ips. nodes:%+v, ips:%+v", nodes, ips))
+		ips = append(ips, ip)
 	}
 	return ips, nil
 }

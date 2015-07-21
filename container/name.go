@@ -33,14 +33,14 @@ func (cng *ContainerName) Parse(cName string) bool {
 	name = name[groupIdx+1:]
 	seqIdx := strings.LastIndex(name, "-")
 	if seqIdx <= 0 {
-		fmt.Printf("'%s' is not a validate container name. [a-z]+(-)[0-9]+\n", name)
+		// fmt.Printf("'%s' is not a validate container name. [a-z]+(-)[0-9]+\n", name)
 		return false
 	}
 	group := name[:seqIdx]
 	seqStr := name[seqIdx+1:]
 	seq, err := strconv.ParseUint(seqStr, 10, 32)
 	if err != nil {
-		fmt.Printf("'%s' is not a validate container name. [a-z]+(-)[0-9]+\n", name)
+		// fmt.Printf("'%s' is not a validate container name. [a-z]+(-)[0-9]+\n", name)
 		return false
 	}
 	cng.Node = node
