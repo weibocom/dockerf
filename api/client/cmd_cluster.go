@@ -76,6 +76,7 @@ func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 	flCRemove := fs.Bool([]string{"-c-rm"}, true, "Remove the stopped containers.")
 	flCScaleIn := fs.Bool([]string{"-c-scale-in"}, false, "Stop extra num of containers, where extra-num is active machines minus necessaries in cluster.yml")
 	flCScaleOut := fs.Bool([]string{"-c-scale-out"}, false, "Run extra num of container, where extra-num is necessary machines minus actives in cluster.yml")
+	flCStep := fs.Int([]string{"-c-step-percent"}, 25, "Process the percent of total container simultaneously")
 	// flCForceRestart := fs.Bool([]string{"-c-force-restart"}, false, "Force restart an running container, when the image is eual with which configured in cluster.yml")
 
 	fs.Parse(args)
@@ -85,10 +86,18 @@ func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 		os.Exit(1)
 	}
 
+	filterLen := flCFilter.Len()
+	_, exists := flCFilter.GetMap()["group"]
+	if filterLen > 1 || (filterLen == 1 && !exists) {
+		if *flCScaleOut || *flCScaleIn {
+			fmt.Printf("Can not '--c-scale-in' and '-c-scale-out' while '--c-filter' set with several filters\n")
+		}
+	}
+
 	path := fs.Args()[0]
 	cluster := buildCluster(*flFile, path)
 
-	context := dcontext.NewClusterContext(*flMScaleIn, *flMScaleOut, *flCScaleIn, *flCScaleOut, *flCRemove, &flCFilter, cluster)
+	context := dcontext.NewClusterContext(*flMScaleIn, *flMScaleOut, *flCScaleIn, *flCScaleOut, *flCRemove, &flCFilter, *flCStep, cluster)
 
 	return context.Deploy()
 }

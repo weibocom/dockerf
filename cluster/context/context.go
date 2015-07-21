@@ -42,6 +42,7 @@ type ClusterContext struct {
 	cScaleOut         bool
 	rmc               bool
 	forceCreate       bool
+	cStepPercent      int
 	filters           *opts.ListOpts
 	machineInfos      []dmachine.MachineInfo
 	containerInfos    []dcontainer.ContainerInfo
@@ -52,7 +53,7 @@ type ClusterContext struct {
 	serviceRegistries map[string]*discovery.ServiceRegisterDriver
 }
 
-func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilter *opts.ListOpts, cluster *dcluster.Cluster) *ClusterContext {
+func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilter *opts.ListOpts, cStepPercent int, cluster *dcluster.Cluster) *ClusterContext {
 	clusterContext := &ClusterContext{
 		create:            true,
 		clusterDesc:       cluster,
@@ -62,6 +63,7 @@ func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilt
 		cScaleIn:          cScaleIn,
 		cScaleOut:         cScaleout,
 		rmc:               rmc,
+		cStepPercent:      cStepPercent,
 		machineInfos:      []dmachine.MachineInfo{},
 		containerInfos:    []dcontainer.ContainerInfo{},
 		mSeq:              sequence.Seq{},
@@ -149,10 +151,6 @@ func (ctx *ClusterContext) loadContainers() error {
 
 func (ctx *ClusterContext) loadAllContainers() ([]dcontainer.ContainerInfo, error) {
 	return ctx.cProxy.ListAll()
-}
-
-func (ctx *ClusterContext) loadContainerByGroup(group string) []dcontainer.ContainerInfo {
-	return ctx.getContainerByGroup(group)
 }
 
 func (ctx *ClusterContext) getContainerByGroup(group string) []dcontainer.ContainerInfo {
@@ -665,7 +663,7 @@ func (ctx *ClusterContext) removeStoppedContainerByGroup(group string) {
 		fmt.Printf("No need to remove stopped container of group '%s'\n", group)
 		return
 	}
-	containers := ctx.loadContainerByGroup(group)
+	containers := ctx.getContainerByGroup(group)
 	var wg sync.WaitGroup
 	for _, c := range containers {
 		if c.IsUp() {
@@ -718,7 +716,17 @@ func (ctx *ClusterContext) startContainer(container *dcontainer.ContainerInfo, d
 
 func (ctx *ClusterContext) deployRunningContainersByDescription(group string, description *dcluster.ContainerDescription) error {
 	var wg sync.WaitGroup
-	containers := ctx.getContainerByGroup(group)
+	runningContainers := func() {
+		containers := ctx.getContainerByGroup(group)
+		running := []dcontainer.ContainerInfo{}
+		for _, c := range containers {
+			if c.IsUp() {
+				running = append(running, c)
+			}
+		}
+	}
+	total := len(runningContainers)
+	sim := int(float64(total) * float64(ctx.cStepPercent) / float64(100))
 	for _, c := range containers {
 		if !c.IsUp() {
 			continue
