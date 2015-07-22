@@ -715,8 +715,7 @@ func (ctx *ClusterContext) startContainer(container *dcontainer.ContainerInfo, d
 }
 
 func (ctx *ClusterContext) deployRunningContainersByDescription(group string, description *dcluster.ContainerDescription) error {
-	var wg sync.WaitGroup
-	runningContainers := func() {
+	runningContainers := func() []dcontainer.ContainerInfo {
 		containers := ctx.getContainerByGroup(group)
 		running := []dcontainer.ContainerInfo{}
 		for _, c := range containers {
@@ -724,19 +723,35 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 				running = append(running, c)
 			}
 		}
-	}
+		return running
+	}()
+	var lock sync.Mutex
 	total := len(runningContainers)
 	sim := int(float64(total) * float64(ctx.cStepPercent) / float64(100))
-	for _, c := range containers {
-		if !c.IsUp() {
-			continue
-		}
+	if sim <= 0 {
+		fmt.Printf("The simutaneous container is less than 0(%d). 1 will be set.", sim)
+		sim = 1
+	}
+	fmt.Printf("Simutaneous of group '%s' is %d\n", group, sim)
+	blocking := make(chan int, sim)
+	done := make(chan bool)
+	doneNum := 0
+
+	for idx, c := range runningContainers {
 		if c.Image == description.Image && !description.Restart {
 			continue
 		}
-		wg.Add(1)
+		blocking <- idx
 		go func(c dcontainer.ContainerInfo, ctx *ClusterContext) {
-			defer wg.Done()
+			defer func() {
+				lock.Lock()
+				defer lock.Unlock()
+				<-blocking
+				doneNum++
+				if doneNum >= total {
+					done <- true
+				}
+			}()
 			ctx.stopContainer(&c, description)
 			if c.Image == description.Image {
 				ctx.startContainer(&c, description) // just restart
@@ -746,7 +761,7 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 
 		}(c, ctx)
 	}
-	wg.Wait()
+	<-done
 	return nil
 }
 
