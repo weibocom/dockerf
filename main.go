@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"runtime"
 	"runtime/pprof"
+	"syscall"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/weibocom/dockerf/api/client"
@@ -13,6 +16,19 @@ import (
 
 func main() {
 	flag.DFlag.Parse(os.Args[1:])
+
+	//register signal for thread dump
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGQUIT)
+
+	go func() {
+		stacktrace := make([]byte, 8192)
+		for _ = range signalChan {
+			length := runtime.Stack(stacktrace, true)
+			fmt.Println(string(stacktrace[:length]))
+		}
+	}()
+
 	// collect cpu profile
 	if *flCpuProfile != "" {
 		f, err := os.Create(*flCpuProfile)

@@ -94,12 +94,46 @@ func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 		}
 	}
 
+	containerFilters := ccli.resolveFilterParam(flCFilter)
+
+	ccli.checkContainerFilter(containerFilters, *flCScaleOut, *flCScaleIn)
+
 	path := fs.Args()[0]
 	cluster := buildCluster(*flFile, path)
 
-	context := dcontext.NewClusterContext(*flMScaleIn, *flMScaleOut, *flCScaleIn, *flCScaleOut, *flCRemove, &flCFilter, *flCStep, cluster)
+	context := dcontext.NewClusterContext(*flMScaleIn, *flMScaleOut, *flCScaleIn, *flCScaleOut, *flCRemove, containerFilters, *flCStep, cluster)
 
 	return context.Deploy()
+}
+
+func (c *ClusterCli) resolveFilterParam(flCFilter opts.ListOpts) map[string]string {
+	filterMapResult := map[string]string{}
+	if flCFilter.Len() <= 0 {
+		return filterMapResult
+	}
+	for _, filter := range flCFilter.GetAll() {
+		if index := strings.Index(filter, "="); index > 0 {
+			name := strings.TrimSpace(filter[0:index])
+			value := strings.TrimSpace(filter[index+1:])
+			filterMapResult[name] = value
+		} else {
+			fmt.Println(fmt.Sprintf("Ignore container filter options: %s", filter))
+		}
+	}
+
+	return filterMapResult
+}
+
+func (c *ClusterCli) checkContainerFilter(filters map[string]string, flCScaleOut bool, flCScaleIn bool) {
+	filterLen := len(filters)
+	if filterLen > 0 {
+		if _, exist := filters["group"]; !exist {
+			panic("Container filter should contains group filter! ")
+		}
+		if filterLen > 1 && (flCScaleOut || flCScaleIn) {
+			panic("Can not '--c-scale-in' and '-c-scale-out' while '--c-filter' set with several filters")
+		}
+	}
 }
 
 func (ccli *ClusterCli) resizeMachine(context *dcontext.ClusterContext, cluster *dcluster.Cluster, scaleIn, scaleOut bool) error {

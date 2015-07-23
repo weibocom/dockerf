@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/opts"
+	// "github.com/docker/docker/opts"
 	dcluster "github.com/weibocom/dockerf/cluster"
 	dcontainer "github.com/weibocom/dockerf/container"
 	"github.com/weibocom/dockerf/discovery"
@@ -34,16 +34,17 @@ func init() {
 }
 
 type ClusterContext struct {
-	create            bool
-	clusterDesc       *dcluster.Cluster
-	mScaleIn          bool
-	mScaleOut         bool
-	cScaleIn          bool
-	cScaleOut         bool
-	rmc               bool
-	forceCreate       bool
-	cStepPercent      int
-	filters           *opts.ListOpts
+	create       bool
+	clusterDesc  *dcluster.Cluster
+	mScaleIn     bool
+	mScaleOut    bool
+	cScaleIn     bool
+	cScaleOut    bool
+	rmc          bool
+	forceCreate  bool
+	cStepPercent int
+	// filters           *opts.ListOpts
+	filters           map[string]string
 	machineInfos      []dmachine.MachineInfo
 	containerInfos    []dcontainer.ContainerInfo
 	mSeq              sequence.Seq
@@ -53,7 +54,7 @@ type ClusterContext struct {
 	serviceRegistries map[string]*discovery.ServiceRegisterDriver
 }
 
-func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilter *opts.ListOpts, cStepPercent int, cluster *dcluster.Cluster) *ClusterContext {
+func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilter map[string]string, cStepPercent int, cluster *dcluster.Cluster) *ClusterContext {
 	clusterContext := &ClusterContext{
 		create:            true,
 		clusterDesc:       cluster,
@@ -277,7 +278,7 @@ func (ctx *ClusterContext) reloadMachineInfos() error {
 
 func (ctx *ClusterContext) initContainerSequences() error {
 	cifs := ctx.containerInfos
-	if len(ctx.filters.GetAll()) > 0 {
+	if len(ctx.filters) > 0 {
 		aCifs, err := ctx.loadAllContainers()
 		if err != nil {
 			return err
@@ -734,23 +735,28 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 	}
 	fmt.Printf("Simutaneous of group '%s' is %d\n", group, sim)
 	blocking := make(chan int, sim)
-	done := make(chan bool)
+	done := make(chan bool, 1)
 	doneNum := 0
+
+	increaseDoneNum := func() {
+		lock.Lock()
+		defer lock.Unlock()
+		doneNum++
+		if doneNum >= total {
+			done <- true
+		}
+	}
 
 	for idx, c := range runningContainers {
 		if c.Image == description.Image && !description.Restart {
+			increaseDoneNum()
 			continue
 		}
 		blocking <- idx
 		go func(c dcontainer.ContainerInfo, ctx *ClusterContext) {
 			defer func() {
-				lock.Lock()
-				defer lock.Unlock()
 				<-blocking
-				doneNum++
-				if doneNum >= total {
-					done <- true
-				}
+				increaseDoneNum()
 			}()
 			ctx.stopContainer(&c, description)
 			if c.Image == description.Image {
