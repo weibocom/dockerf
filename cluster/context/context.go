@@ -728,12 +728,16 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 	}()
 	var lock sync.Mutex
 	total := len(runningContainers)
+	if total <= 0 {
+		fmt.Println(fmt.Sprintf("No running container for group %s is available. ", group))
+		return nil
+	}
 	sim := int(float64(total) * float64(ctx.cStepPercent) / float64(100))
 	if sim <= 0 {
-		fmt.Printf("The simutaneous container is less than 0(%d). 1 will be set.", sim)
+		fmt.Printf("The simutaneous container is less than 0(%d). 1 will be set.\n", sim)
 		sim = 1
 	}
-	fmt.Printf("Simutaneous of group '%s' is %d\n", group, sim)
+	fmt.Printf("Simutaneous of group '%s' is %d, total: %d\n", group, sim, total)
 	blocking := make(chan int, sim)
 	done := make(chan bool, 1)
 	doneNum := 0
