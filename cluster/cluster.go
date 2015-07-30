@@ -8,12 +8,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type OS struct {
-	Provider string
-	Bits     int
-	Version  string
-}
-
 type Disk struct {
 	Type     string
 	Capacity string
@@ -61,7 +55,7 @@ func (md *MachineDescription) GetDiskCapacityInBytes() int {
 }
 
 type MachineCluster struct {
-	OS       OS
+	OS       string
 	Topology map[string]MachineDescription
 }
 
@@ -113,8 +107,9 @@ type ServiceDiscoverDiscription map[string]string
 type Cluster struct {
 	ClusterBy     string // such as swarm
 	MasterNode    string
-	Driver        string // aliyun do virtualbox
-	DriverOptions []string
+	Driver        string   // aliyun do virtualbox
+	DriverOptions []string // docker machine create options
+	GlobalOptions []string // docker machine global options
 	Discovery     string
 
 	Machine   MachineCluster

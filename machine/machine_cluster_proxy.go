@@ -13,6 +13,7 @@ type MachineClusterProxy struct {
 	Driver        string
 	Discovery     string
 	Master        string
+	GlobalOptions []string
 	MasterOptions []string
 	SlaveOptions  []string
 	NoneOptions   []string
@@ -21,7 +22,7 @@ type MachineClusterProxy struct {
 	seqs          map[string]*dseq.Seq
 }
 
-func NewMachineClusterProxy(name, clusterBy, driver, discovery, master string, driverOptions []string) *MachineClusterProxy {
+func NewMachineClusterProxy(name, clusterBy, driver, discovery, master string, globalOptions []string, driverOptions []string) *MachineClusterProxy {
 	mp := NewMachineProxy(name)
 	mOpts, sOpts, nOpts := GetOptions(clusterBy, driver, discovery, driverOptions)
 
@@ -29,6 +30,7 @@ func NewMachineClusterProxy(name, clusterBy, driver, discovery, master string, d
 		ClusterBy:     clusterBy,
 		Driver:        driver,
 		Discovery:     discovery,
+		GlobalOptions: globalOptions,
 		Master:        master,
 		MasterOptions: mOpts,
 		SlaveOptions:  sOpts,
@@ -93,7 +95,7 @@ func (mp *MachineClusterProxy) IPs(machines []string) ([]string, error) {
 }
 
 func (mp *MachineClusterProxy) CreateMaster() error {
-	return mp.Proxy.Create(mp.Master, mp.MasterOptions...)
+	return mp.Proxy.Create(mp.Master, mp.GlobalOptions, mp.MasterOptions)
 }
 
 func (mp *MachineClusterProxy) generateName(group string) string {
@@ -116,7 +118,7 @@ func (mp *MachineClusterProxy) CreateSlave(group string, md dcluster.MachineDesc
 	if len(extOpts) > 0 {
 		opts = append(opts, extOpts...)
 	}
-	return nodeName, mp.Proxy.Create(nodeName, opts...)
+	return nodeName, mp.Proxy.Create(nodeName, mp.GlobalOptions, opts)
 }
 
 func (mp *MachineClusterProxy) CreateMachine(group string, opts ...string) error {
@@ -126,7 +128,7 @@ func (mp *MachineClusterProxy) CreateMachine(group string, opts ...string) error
 		cOptions = append(cOptions, opts...)
 	}
 	nodeName := mp.generateName(group)
-	return mp.Proxy.Create(nodeName, cOptions...)
+	return mp.Proxy.Create(nodeName, mp.GlobalOptions, cOptions)
 }
 
 func (mp *MachineClusterProxy) Start(names ...string) ([]string, error) {

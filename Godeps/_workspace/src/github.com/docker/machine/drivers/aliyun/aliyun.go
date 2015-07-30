@@ -17,7 +17,6 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/docker/machine/drivers"
 	"github.com/docker/machine/log"
-	// "github.com/docker/machine/provider"
 	"github.com/docker/machine/ssh"
 	"github.com/docker/machine/state"
 	"github.com/docker/machine/utils"
@@ -111,6 +110,11 @@ func GetCreateFlags() []cli.Flag {
 			Usage: "Aliyun Internet Bandwidth Out",
 			Value: "1",
 		},
+		cli.StringFlag{
+			//TODO CentOS6支持
+			Name:  "aliyun-docker-args",
+			Usage: "Aliyun Docker Daemon Arguments",
+		},
 	}
 }
 
@@ -166,10 +170,6 @@ func (d *Driver) GetSSHUsername() string {
 func (d *Driver) GetSSHPassword() string {
 	return d.SSHPass
 }
-
-// func (d *Driver) GetProviderType() provider.ProviderType {
-// 	return provider.Remote
-// }
 
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.AccessKeyId = flags.String("aliyun-access-key-id")
@@ -312,12 +312,9 @@ func (d *Driver) PreCreateCheck() error {
 
 func (d *Driver) Create() error {
 	// Create SSH key
-	log.Debugf("Creating ssh key --- \n")
 	if err := d.createSSHKey(); err != nil {
 		return err
 	}
-
-	return nil
 
 	// Create instance
 	log.Info("Creating ECS instance...")
@@ -535,9 +532,8 @@ func (d *Driver) createSSHKey() error {
 	if err != nil {
 		return err
 	}
-	d.PublicKey = publicKey[0 : len(publicKey)-1]
-	log.Debugf("------------%s\n")
-	log.Debug(string(publicKey))
+	d.PublicKey = publicKey
+	log.Debug(publicKey)
 
 	return nil
 }
@@ -587,16 +583,16 @@ func (d *Driver) uploadKeyPair() error {
 	if err != nil {
 		return nil
 	}
+	// ssh.SetDefaultClient(ssh.Native)
 
 	sshCli, err := ssh.NewClient(d.GetSSHUsername(), ip, port, &auth)
 	if err != nil {
 		return err
 	}
-	pk := d.PublicKey[0 : len(d.PublicKey)-1]
-	log.Debugf("upload --- command...")
-	command := fmt.Sprintf("mkdir -p ~/.ssh; echo '%s' > ~/.ssh/authorized_keys", string(pk))
-	output, err := sshCli.Output(command)
 
+	command := fmt.Sprintf("mkdir -p ~/.ssh; echo '%s' > ~/.ssh/authorized_keys", string(d.PublicKey))
+	output, err := sshCli.Output(command)
+	log.Debugf("upload command: %s", command)
 	log.Debugf("upload public key with err, output: %v: %s", err, output)
 
 	if err != nil {
