@@ -13,6 +13,7 @@ import (
 	// "github.com/docker/docker/opts"
 	dcluster "github.com/weibocom/dockerf/cluster"
 	dcontainer "github.com/weibocom/dockerf/container"
+	dcontainerfilter "github.com/weibocom/dockerf/container/filter"
 	"github.com/weibocom/dockerf/discovery"
 	dmachine "github.com/weibocom/dockerf/machine"
 	"github.com/weibocom/dockerf/sequence"
@@ -45,14 +46,15 @@ type ClusterContext struct {
 	forceCreate  bool
 	cStepPercent int
 	// filters           *opts.ListOpts
-	filters           map[string]string
-	machineInfos      []dmachine.MachineInfo
-	containerInfos    []dcontainer.ContainerInfo
-	mSeq              sequence.Seq
-	cSeqs             map[string]*sequence.Seq
-	mProxy            *dmachine.MachineClusterProxy
-	cProxy            *dcontainer.DockerProxy
-	serviceRegistries map[string]*discovery.ServiceRegisterDriver
+	filters              map[string]string
+	machineInfos         []dmachine.MachineInfo
+	containerInfos       []dcontainer.ContainerInfo
+	mSeq                 sequence.Seq
+	cSeqs                map[string]*sequence.Seq
+	mProxy               *dmachine.MachineClusterProxy
+	cProxy               *dcontainer.DockerProxy
+	serviceRegistries    map[string]*discovery.ServiceRegisterDriver
+	containerFilterChain *dcontainerfilter.FilterChain
 }
 
 func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilter map[string]string, cStepPercent int, cluster *dcluster.Cluster) *ClusterContext {
@@ -109,6 +111,8 @@ func (ctx *ClusterContext) initContext() {
 	}
 	ctx.cProxy = containerProxy
 
+	ctx.containerFilterChain = dcontainerfilter.NewFilterChain(ctx.cProxy)
+
 	fmt.Printf("Init the consule cluster.\n")
 	if err := ctx.startConsulCluster(); err != nil {
 		panic("Start consul cluster failed: " + err.Error())
@@ -117,7 +121,7 @@ func (ctx *ClusterContext) initContext() {
 	fmt.Println("Init the named machine sequence...")
 	ctx.initMachineSequence(mis)
 
-	fmt.Printf("Loading all filtered container infos")
+	fmt.Printf("Loading all filtered container infos... \n")
 	if err := ctx.loadContainers(); err != nil {
 		panic("Init cluster context error, cannot list container infos:" + err.Error())
 	}
@@ -144,7 +148,17 @@ func (ctx *ClusterContext) parsePortBindings() error {
 }
 
 func (ctx *ClusterContext) loadContainers() error {
-	infos, err := ctx.cProxy.ListAll()
+	var (
+		infos []dcontainer.ContainerInfo
+		err   error
+	)
+	if len(ctx.filters) <= 0 {
+		infos, err = ctx.cProxy.ListAll()
+	} else {
+		infos, err = ctx.containerFilterChain.Filter(ctx.filters)
+	}
+	fmt.Printf("Load containers: %v, filters: %v \n", infos, ctx.filters)
+	// infos, err := ctx.cProxy.ListAll()
 	if err == nil {
 		ctx.containerInfos = infos
 	}
@@ -789,6 +803,7 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 func (ctx *ClusterContext) scaleOutContainersByDescription(group string, description *dcluster.ContainerDescription) error {
 	if !ctx.cScaleOut {
 		fmt.Printf("--scale-out is set to false(not set), not need to scale container out for group '%s'.\n", group)
+		return nil
 	}
 	containers := ctx.getContainerByGroup(group)
 	running := 0
@@ -819,6 +834,7 @@ func (ctx *ClusterContext) scaleOutContainersByDescription(group string, descrip
 func (ctx *ClusterContext) scaleInContainersByDescription(group string, description *dcluster.ContainerDescription) error {
 	if !ctx.cScaleIn {
 		fmt.Printf("--scale-in is set to false(not set), not need to scale container out for group '%s'.\n", group)
+		return nil
 	}
 	containers := ctx.getContainerByGroup(group)
 	running := 0
