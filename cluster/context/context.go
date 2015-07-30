@@ -3,6 +3,7 @@ package context
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	// "github.com/docker/docker/opts"
 	dcluster "github.com/weibocom/dockerf/cluster"
 	dcontainer "github.com/weibocom/dockerf/container"
+	dcontainerfilter "github.com/weibocom/dockerf/container/filter"
 	"github.com/weibocom/dockerf/discovery"
 	dmachine "github.com/weibocom/dockerf/machine"
 	"github.com/weibocom/dockerf/sequence"
@@ -44,14 +46,15 @@ type ClusterContext struct {
 	forceCreate  bool
 	cStepPercent int
 	// filters           *opts.ListOpts
-	filters           map[string]string
-	machineInfos      []dmachine.MachineInfo
-	containerInfos    []dcontainer.ContainerInfo
-	mSeq              sequence.Seq
-	cSeqs             map[string]*sequence.Seq
-	mProxy            *dmachine.MachineClusterProxy
-	cProxy            *dcontainer.DockerProxy
-	serviceRegistries map[string]*discovery.ServiceRegisterDriver
+	filters              map[string]string
+	machineInfos         []dmachine.MachineInfo
+	containerInfos       []dcontainer.ContainerInfo
+	mSeq                 sequence.Seq
+	cSeqs                map[string]*sequence.Seq
+	mProxy               *dmachine.MachineClusterProxy
+	cProxy               *dcontainer.DockerProxy
+	serviceRegistries    map[string]*discovery.ServiceRegisterDriver
+	containerFilterChain *dcontainerfilter.FilterChain
 }
 
 func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilter map[string]string, cStepPercent int, cluster *dcluster.Cluster) *ClusterContext {
@@ -108,6 +111,8 @@ func (ctx *ClusterContext) initContext() {
 	}
 	ctx.cProxy = containerProxy
 
+	ctx.containerFilterChain = dcontainerfilter.NewFilterChain(ctx.cProxy)
+
 	fmt.Printf("Init the consule cluster.\n")
 	if err := ctx.startConsulCluster(); err != nil {
 		panic("Start consul cluster failed: " + err.Error())
@@ -116,7 +121,7 @@ func (ctx *ClusterContext) initContext() {
 	fmt.Println("Init the named machine sequence...")
 	ctx.initMachineSequence(mis)
 
-	fmt.Printf("Loading all filtered container infos")
+	fmt.Printf("Loading all filtered container infos... \n")
 	if err := ctx.loadContainers(); err != nil {
 		panic("Init cluster context error, cannot list container infos:" + err.Error())
 	}
@@ -148,7 +153,17 @@ func (ctx *ClusterContext) parsePortBindings() error {
 }
 
 func (ctx *ClusterContext) loadContainers() error {
-	infos, err := ctx.cProxy.ListAll()
+	var (
+		infos []dcontainer.ContainerInfo
+		err   error
+	)
+	if len(ctx.filters) <= 0 {
+		infos, err = ctx.cProxy.ListAll()
+	} else {
+		infos, err = ctx.containerFilterChain.Filter(ctx.filters)
+	}
+	fmt.Printf("Load containers: %v, filters: %v \n", infos, ctx.filters)
+	// infos, err := ctx.cProxy.ListAll()
 	if err == nil {
 		ctx.containerInfos = infos
 	}
@@ -703,27 +718,33 @@ func (ctx *ClusterContext) removeStoppedContainerByGroup(group string) {
 		wg.Add(1)
 		fmt.Printf("Remove an container: container id: %s name:%s\n", c.ID, c.Name[0])
 
-		go func(c *dcontainer.ContainerInfo) {
+		go func(c dcontainer.ContainerInfo) {
 			defer wg.Done()
 			if err := ctx.cProxy.RemoveContainer(c.ID); err != nil {
 				fmt.Printf("Failed to remove an container. cid:%s, name:%s, Error:%s\n", c.ID, c.Name[0], err.Error())
 			} else {
 				fmt.Printf("Successfully to remove an container. cid:%s, name:%s. %s\n", c.ID, c.Name[0])
 			}
-		}(&c)
+		}(c)
 	}
 	wg.Wait()
 }
 
-func (ctx *ClusterContext) stopContainer(c *dcontainer.ContainerInfo, description *dcluster.ContainerDescription) {
+func (ctx *ClusterContext) stopContainer(c *dcontainer.ContainerInfo, description *dcluster.ContainerDescription) error {
 	cid := c.ID
 	cName := c.Name[0]
 	if len(c.IpPorts) > 0 && description != nil {
 		ip := c.IpPorts[0].IP
 		port := c.IpPorts[0].PublicPort
 		fmt.Printf("Unregister service before stop a container. cid:%s, name: %s, ip:%s, port:%d\n", cid, cName, ip, port)
-		if err := ctx.unregisterService(ip, port, description); err != nil {
-			panic(fmt.Sprintf("Failed to unregister container service. cid:%s, name: %s, ip:%s, port:%d. Error:%s\n", cid, cName, ip, port, err.Error()))
+		if err := ctx.unregisterService(ip, port, description); err != nil && err != io.EOF {
+			fmt.Println(fmt.Sprintf("Failed to unregister container service. cid:%s, name: %s, ip:%s, port:%d. Error:%s\n", cid, cName, ip, port, err.Error()))
+			return err
+		}
+		fmt.Printf("Container unregistered, begin to stop an container: container id: %s\n", cid)
+		if err := ctx.cProxy.StopContainer(cid); err != nil {
+			fmt.Println(fmt.Sprintf("Failed to stop container. CID:%s, name:%s, Error:%s", cid, cName, err.Error()))
+			return err
 		}
 		fmt.Printf("Container unregistered, begin to stop an container: container id: %s\n", cid)
 	}
@@ -731,18 +752,22 @@ func (ctx *ClusterContext) stopContainer(c *dcontainer.ContainerInfo, descriptio
 		panic(fmt.Sprintf("Failed to stop container. CID:%s, name:%s, Error:%s", cid, cName, err.Error()))
 	}
 	fmt.Printf("Container stopped securely and successfully. name:%s, container id: %s\n", cName, cid)
+	return nil
 }
 
-func (ctx *ClusterContext) startContainer(container *dcontainer.ContainerInfo, description *dcluster.ContainerDescription) {
+func (ctx *ClusterContext) startContainer(container *dcontainer.ContainerInfo, description *dcluster.ContainerDescription) error {
 	fmt.Printf("Restarting container. cid:%s, image:%s, name:%s\n", container.ID, container.Image, container.Name[0])
 	if err := ctx.cProxy.RestartContainer(container.ID); err != nil {
-		panic(fmt.Sprintf("Failed to restart container.  cid:%s, image:%s, name:%s, err:%s\n", container.ID, container.Image, container.Name[0], err.Error()))
+		fmt.Println(fmt.Sprintf("Failed to restart container.  cid:%s, image:%s, name:%s, err:%s\n", container.ID, container.Image, container.Name[0], err.Error()))
+		return err
 	}
 	fmt.Printf("Container restarted, begin to register. cid:%s, image:%s, name:%s\n", container.ID, container.Image, container.Name[0])
-	if err := ctx.registerServiceByContainer(container, description); err != nil {
-		panic(fmt.Sprintf("Service Register failed. name:%s, error:%s\n", container.Name[0], err.Error()))
+	if err := ctx.registerServiceByContainer(container, description); err != nil && err != io.EOF {
+		fmt.Println(fmt.Sprintf("Service Register failed. name:%s, error:%s\n", container.Name[0], err.Error()))
+		return err
 	}
 	fmt.Printf("Container successfully. cid:%s, image:%s, name:%s\n", container.ID, container.Image, container.Name[0])
+	return nil
 }
 
 func (ctx *ClusterContext) deployRunningContainersByDescription(group string, description *dcluster.ContainerDescription) error {
@@ -794,7 +819,11 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 			}()
 			ctx.stopContainer(&c, description)
 			if c.Image == description.Image {
-				ctx.startContainer(&c, description) // just restart
+				err := ctx.startContainer(&c, description) // just restart
+				if err != nil && err != io.EOF {
+					fmt.Printf("Fail to start an existing container, error: %s, run a brand new container instead.. ", err.Error())
+					ctx.runContainer(description, group)
+				}
 			} else {
 				ctx.runContainer(description, group)
 			}
@@ -866,10 +895,10 @@ func (ctx *ClusterContext) scaleInContainersByDescription(group string, descript
 		}
 		stopped++
 		wg.Add(1)
-		go func(group string, cd *dcluster.ContainerDescription) {
+		go func(container dcontainer.ContainerInfo, cd *dcluster.ContainerDescription) {
 			defer wg.Done()
-			ctx.stopContainer(&c, description)
-		}(group, description)
+			ctx.stopContainer(&container, description)
+		}(c, description)
 	}
 	wg.Wait()
 	return nil
