@@ -20,7 +20,7 @@ func init() {
 func (f *IpFilter) filter(filteredIp string, containers []dcontainer.ContainerInfo) ([]dcontainer.ContainerInfo, error) {
 	result := []dcontainer.ContainerInfo{}
 
-	fmt.Println(fmt.Sprintf("Apply a ip filter, filter ips: %s", string(filteredIp)))
+	fmt.Println(fmt.Sprintf("Apply a ip filter, filter ips: %s", filteredIp))
 
 	ips := strings.Split(filteredIp, ip_separator)
 
