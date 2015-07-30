@@ -2,11 +2,13 @@ package machine
 
 import (
 	"os"
+	"path"
 
 	"github.com/codegangsta/cli"
 
 	"github.com/docker/machine/commands"
 	"github.com/docker/machine/log"
+	"github.com/docker/machine/ssh"
 	"github.com/docker/machine/utils"
 	"github.com/docker/machine/version"
 )
@@ -44,13 +46,25 @@ Options:
 
 func NewMachineApp(appName string) *cli.App {
 	app := cli.NewApp()
-	app.Name = appName
+	name := appName
+	if name == "" {
+		name = path.Base(os.Args[0])
+	}
+	app.Name = name
 	app.Author = "Docker Machine Contributors"
 	app.Email = "https://github.com/docker/machine"
 	app.Before = func(c *cli.Context) error {
 		os.Setenv("MACHINE_STORAGE_PATH", c.GlobalString("storage-path"))
+		if c.GlobalBool("native-ssh") {
+			ssh.SetDefaultClient(ssh.Native)
+		}
 		return nil
 	}
+	app.Commands = commands.Commands
+	app.CommandNotFound = cmdNotFound
+	app.Usage = "Create and manage machines running Docker."
+	app.Version = version.VERSION + " (" + version.GITCOMMIT + ")"
+
 	app.Commands = commands.Commands
 	app.CommandNotFound = cmdNotFound
 	app.Usage = "Create and manage machines running Docker."
@@ -63,7 +77,7 @@ func NewMachineApp(appName string) *cli.App {
 		},
 		cli.StringFlag{
 			EnvVar: "MACHINE_STORAGE_PATH",
-			Name:   "storage-path",
+			Name:   "s, storage-path",
 			Value:  utils.GetBaseDir(),
 			Usage:  "Configures storage path",
 		},
@@ -91,7 +105,13 @@ func NewMachineApp(appName string) *cli.App {
 			Usage:  "Private key used in client TLS auth",
 			Value:  "",
 		},
+		cli.BoolFlag{
+			EnvVar: "MACHINE_NATIVE_SSH",
+			Name:   "native-ssh",
+			Usage:  "Use the native (Go-based) SSH implementation.",
+		},
 	}
+
 	return app
 }
 

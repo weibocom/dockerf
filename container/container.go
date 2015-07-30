@@ -20,6 +20,7 @@ type ContainerInfo struct {
 	Machine string
 	IpPorts []IPPort
 	Group   string
+	Node    string
 }
 
 func (info *ContainerInfo) IsUp() bool {

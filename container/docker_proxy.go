@@ -154,10 +154,11 @@ func (d *DockerProxy) ListContainers(all bool, size bool, filters string) ([]Con
 				}
 				cn := ContainerName{}
 				if !cn.Parse(info.Name[0]) {
-					fmt.Printf("Container(id:%s, name:%s) is not valid.\n", info.ID, info.Name[0])
+					// fmt.Printf("Container(id:%s, name:%s) is not valid.\n", info.ID, info.Name[0])
 					continue
 				}
 				info.Group = cn.Group
+				info.Node = cn.Node
 				cifs = append(cifs, info)
 			}
 		}

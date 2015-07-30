@@ -43,8 +43,10 @@ func (mp *MachineProxy) Destroy(names ...string) error {
 	return mp.Run(args...)
 }
 
-func (mp *MachineProxy) Create(name string, options ...string) error {
-	args := []string{"create"}
+func (mp *MachineProxy) Create(name string, globalOptions []string, options []string) error {
+	args := []string{}
+	args = append(args, globalOptions...)
+	args = append(args, "create")
 	args = append(args, options...)
 	args = append(args, name)
 	fmt.Printf("Create machine. name:%s, args:%+v\n", name, args)
