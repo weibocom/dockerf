@@ -14,6 +14,7 @@ type MachineClusterProxy struct {
 	Discovery     string
 	Master        string
 	GlobalOptions []string
+	DriverOptions []string
 	MasterOptions []string
 	SlaveOptions  []string
 	NoneOptions   []string
@@ -23,18 +24,17 @@ type MachineClusterProxy struct {
 }
 
 func NewMachineClusterProxy(name, clusterBy, driver, discovery, master string, globalOptions []string, driverOptions []string) *MachineClusterProxy {
+	if clusterBy != "swarm" {
+		panic("'" + clusterBy + "' is not supported.")
+	}
 	mp := NewMachineProxy(name)
-	mOpts, sOpts, nOpts := GetOptions(clusterBy, driver, discovery, driverOptions)
-
 	mcp := &MachineClusterProxy{
 		ClusterBy:     clusterBy,
 		Driver:        driver,
 		Discovery:     discovery,
 		GlobalOptions: globalOptions,
 		Master:        master,
-		MasterOptions: mOpts,
-		SlaveOptions:  sOpts,
-		NoneOptions:   nOpts,
+		DriverOptions: driverOptions,
 		Proxy:         mp,
 		Name:          name,
 		seqs:          map[string]*dseq.Seq{},
@@ -43,21 +43,28 @@ func NewMachineClusterProxy(name, clusterBy, driver, discovery, master string, g
 	return mcp
 }
 
-func GetOptions(clusterBy, driver, discovery string, driverOptions []string) ([]string, []string, []string) {
-	if clusterBy != "swarm" {
-		panic("'" + clusterBy + "' is not supported.")
+func (mp *MachineClusterProxy) getMasterOptions() []string {
+	masterOptions := []string{"-d", mp.Driver, "--swarm", "--swarm-master", "--swarm-discovery", mp.Discovery, "--engine-label", "role=master"}
+	if len(mp.DriverOptions) > 0 {
+		masterOptions = append(masterOptions, mp.DriverOptions...)
 	}
-	masterOptions := []string{"-d", driver, "--swarm", "--swarm-master", "--swarm-discovery", discovery, "--engine-label", "role=master"}
-	slaveOptions := []string{"-d", driver, "--swarm", "--swarm-discovery", discovery, "--engine-label", "role=slave"}
+	return masterOptions
+}
 
-	noneOptions := []string{"-d", driver, "--swarm", "--swarm-discovery", discovery}
-
-	if len(driverOptions) > 0 {
-		masterOptions = append(masterOptions, driverOptions...)
-		slaveOptions = append(slaveOptions, driverOptions...)
-		noneOptions = append(noneOptions, driverOptions...)
+func (mp *MachineClusterProxy) getSlaveOptions() []string {
+	slaveOptions := []string{"-d", mp.Driver, "--swarm", "--swarm-discovery", mp.Discovery, "--engine-label", "role=slave"}
+	if len(mp.DriverOptions) > 0 {
+		slaveOptions = append(slaveOptions, mp.DriverOptions...)
 	}
-	return masterOptions, slaveOptions, noneOptions
+	return slaveOptions
+}
+
+func (mp *MachineClusterProxy) getMachineOptions() []string {
+	noneOptions := []string{"-d", mp.Driver}
+	if len(mp.DriverOptions) > 0 {
+		noneOptions = append(noneOptions, mp.DriverOptions...)
+	}
+	return noneOptions
 }
 
 func (mp *MachineClusterProxy) initSequences() {
@@ -94,8 +101,14 @@ func (mp *MachineClusterProxy) IPs(machines []string) ([]string, error) {
 	return mp.Proxy.IPs(machines)
 }
 
-func (mp *MachineClusterProxy) CreateMaster() error {
-	return mp.Proxy.Create(mp.Master, mp.GlobalOptions, mp.MasterOptions)
+func (mp *MachineClusterProxy) CreateMaster(md dcluster.MachineDescription) error {
+	opts := mp.getMasterOptions()
+	extOpts, err := dopts.GetOptions(mp.Driver, md)
+	if err != nil {
+		return err
+	}
+	opts = append(opts, extOpts...)
+	return mp.Proxy.Create(mp.Master, mp.GlobalOptions, opts)
 }
 
 func (mp *MachineClusterProxy) generateName(group string) string {
@@ -110,7 +123,7 @@ func (mp *MachineClusterProxy) generateName(group string) string {
 func (mp *MachineClusterProxy) CreateSlave(group string, md dcluster.MachineDescription) (string, error) {
 	nodeName := mp.generateName(group)
 	opts := []string{"--engine-label", "group=" + group}
-	opts = append(opts, mp.SlaveOptions...)
+	opts = append(opts, mp.getSlaveOptions()...)
 	extOpts, err := dopts.GetOptions(mp.Driver, md)
 	if err != nil {
 		return "", err
@@ -121,14 +134,20 @@ func (mp *MachineClusterProxy) CreateSlave(group string, md dcluster.MachineDesc
 	return nodeName, mp.Proxy.Create(nodeName, mp.GlobalOptions, opts)
 }
 
-func (mp *MachineClusterProxy) CreateMachine(group string, opts ...string) error {
-	cOptions := []string{"--engine-label", "group=" + group}
-	cOptions = append(cOptions, mp.NoneOptions...)
-	if len(opts) > 0 {
-		cOptions = append(cOptions, opts...)
+func (mp *MachineClusterProxy) CreateMachine(node string, md dcluster.MachineDescription, driverOptions []string) error {
+	opts := mp.getMachineOptions()
+	if len(driverOptions) > 0 {
+		opts = append(opts, driverOptions...)
 	}
-	nodeName := mp.generateName(group)
-	return mp.Proxy.Create(nodeName, mp.GlobalOptions, cOptions)
+	extOpts, err := dopts.GetOptions(mp.Driver, md)
+	if err != nil {
+		return err
+	}
+	if len(extOpts) > 0 {
+		opts = append(opts, extOpts...)
+	}
+
+	return mp.Proxy.Create(node, mp.GlobalOptions, opts)
 }
 
 func (mp *MachineClusterProxy) Start(names ...string) ([]string, error) {

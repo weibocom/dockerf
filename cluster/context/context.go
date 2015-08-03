@@ -95,6 +95,11 @@ func (ctx *ClusterContext) initContext() {
 	}
 	ctx.machineInfos = mis
 
+	fmt.Printf("Init the consule cluster.\n")
+	if err := ctx.startConsulCluster(); err != nil {
+		panic("Start consul cluster failed: " + err.Error())
+	}
+
 	fmt.Printf("Starting machine master\n")
 	if err := ctx.startMaster(); err != nil {
 		panic("Start cluster master failed: " + err.Error())
@@ -112,11 +117,6 @@ func (ctx *ClusterContext) initContext() {
 	ctx.cProxy = containerProxy
 
 	ctx.containerFilterChain = dcontainerfilter.NewFilterChain(ctx.cProxy)
-
-	fmt.Printf("Init the consule cluster.\n")
-	if err := ctx.startConsulCluster(); err != nil {
-		panic("Start consul cluster failed: " + err.Error())
-	}
 
 	fmt.Println("Init the named machine sequence...")
 	ctx.initMachineSequence(mis)
@@ -415,7 +415,7 @@ func (ctx *ClusterContext) getConsulPortBindings() []dcluster.PortBinding {
 }
 
 func (ctx *ClusterContext) runConsulJoinServer(server dcluster.ConsulServer, joinNode string, joinIp string, bootstrapIp string) (string, error) {
-	name := fmt.Sprintf("%s-consul-server-join", joinIp)
+	name := fmt.Sprintf("%s-join", joinNode)
 	portBindings := ctx.getConsulPortBindings()
 	cmds := []string{
 		"-server",
@@ -429,20 +429,27 @@ func (ctx *ClusterContext) runConsulJoinServer(server dcluster.ConsulServer, joi
 	envs := []string{"constraint:node==" + joinNode}
 
 	runConfig := dcontainer.ContainerRunConfig{
-		Image:        server.Image,
-		Name:         name,
-		PortBindings: portBindings,
-		Hostname:     name,
-		Envs:         envs,
-		Cmds:         cmds,
+		Image:         server.Image,
+		Name:          name,
+		PortBindings:  portBindings,
+		Hostname:      name,
+		Envs:          envs,
+		Cmds:          cmds,
+		RestartPolicy: dcontainer.RestartPolicy{Name: "always"},
 	}
 
-	return ctx.cProxy.RunByConfig(runConfig)
+	dproxy, err := ctx.createPlainDockerProxy(joinNode)
+
+	if err != nil {
+		return "", err
+	}
+
+	return dproxy.RunByConfig(runConfig)
 }
 
 func (ctx *ClusterContext) runConsulBootstrapServer(serverNode string, serverIP string) (string, error) {
 	server := ctx.clusterDesc.ConsulCluster.Server
-	name := fmt.Sprintf("%s-consulserverbootstrap", serverNode)
+	name := fmt.Sprintf("%s-boot", serverNode)
 	portBindings := ctx.getConsulPortBindings()
 	cmds := []string{
 		"-server",
@@ -456,15 +463,30 @@ func (ctx *ClusterContext) runConsulBootstrapServer(serverNode string, serverIP 
 	envs := []string{"constraint:node==" + serverNode}
 
 	runConfig := dcontainer.ContainerRunConfig{
-		Image:        server.Image,
-		Name:         name,
-		PortBindings: portBindings,
-		Hostname:     name,
-		Envs:         envs,
-		Cmds:         cmds,
+		Image:         server.Image,
+		Name:          name,
+		PortBindings:  portBindings,
+		Hostname:      name,
+		Envs:          envs,
+		Cmds:          cmds,
+		RestartPolicy: dcontainer.RestartPolicy{Name: "always"},
 	}
 
-	return ctx.cProxy.RunByConfig(runConfig)
+	dproxy, err := ctx.createPlainDockerProxy(serverNode)
+
+	if err != nil {
+		return "", err
+	}
+
+	return dproxy.RunByConfig(runConfig)
+}
+
+func (ctx *ClusterContext) createPlainDockerProxy(node string) (*dcontainer.DockerProxy, error) {
+	tlsConfig, err := ctx.mProxy.ConfigNode(node)
+	if err != nil {
+		return nil, err
+	}
+	return dcontainer.NewDockerProxy(tlsConfig)
 }
 
 func (ctx *ClusterContext) runConsulAgent(dockerProxy *dcontainer.DockerProxy, agent dcluster.ConsulAgent, agentNode string, agentIp string) (string, error) {
@@ -513,18 +535,15 @@ func (ctx *ClusterContext) initSlave(node string, md dcluster.MachineDescription
 	}
 
 	if md.Consul {
-		tlsConfig, err := ctx.mProxy.ConfigNode(node)
+		proxy, err := ctx.createPlainDockerProxy(node)
 		if err != nil {
-			return errors.New(fmt.Sprintf("Failed to load config for node '%s'", node))
+			panic(fmt.Sprintf("Failed to new docker proxy formachine:%s\n", node))
+
 		}
 		ip, err := ctx.mProxy.IP(node)
 		if err != nil {
 			fmt.Printf("Failed to load agent ip:'%s', error:%s\n", node, err.Error())
 			return err
-		}
-		proxy, err := dcontainer.NewDockerProxy(tlsConfig)
-		if err != nil {
-			fmt.Printf("Failed to new docker proxy. machine:%s, tlsConfig:%s\n", node, tlsConfig)
 		}
 		fmt.Printf("Run consul agent on '%s(%s)'\n", node, ip)
 		if cid, err := ctx.runConsulAgent(proxy, ctx.clusterDesc.ConsulCluster.Agent, node, ip); err != nil {
@@ -836,7 +855,7 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 
 func (ctx *ClusterContext) scaleOutContainersByDescription(group string, description *dcluster.ContainerDescription) error {
 	if !ctx.cScaleOut {
-		fmt.Printf("--scale-out is set to false(not set), no need to scale container out for group '%s'.\n", group)
+		fmt.Printf("scale out container flag is set to false(not set), no need to scale container out for group '%s'.\n", group)
 		return nil
 	}
 	containers := ctx.getContainerByGroup(group)
@@ -867,7 +886,7 @@ func (ctx *ClusterContext) scaleOutContainersByDescription(group string, descrip
 
 func (ctx *ClusterContext) scaleInContainersByDescription(group string, description *dcluster.ContainerDescription) error {
 	if !ctx.cScaleIn {
-		fmt.Printf("--scale-in is set to false(not set), not need to scale container out for group '%s'.\n", group)
+		fmt.Printf("scale in flag is set to false(not set), not need to scale container out for group '%s'.\n", group)
 		return nil
 	}
 	containers := ctx.getContainerByGroup(group)
@@ -1130,7 +1149,8 @@ func (ctx *ClusterContext) startMaster() error {
 	if !exists {
 		if ctx.create {
 			fmt.Printf("Master is not exists on the cluster, creating an new master.\n")
-			if err := ctx.mProxy.CreateMaster(); err != nil {
+			mmd := ctx.clusterDesc.Machine.Master
+			if err := ctx.mProxy.CreateMaster(mmd); err != nil {
 				return err
 			}
 			ctx.reloadMachineInfos()
@@ -1151,6 +1171,46 @@ func (ctx *ClusterContext) startMaster() error {
 	return nil
 }
 
+func (ctx *ClusterContext) createConsulClusterServers(nodes []string) error {
+	server := ctx.clusterDesc.ConsulCluster.Server
+	smd, ok := ctx.clusterDesc.Machine.Topology[server.Machine]
+	if !ok {
+		return errors.New(fmt.Sprintf("Consul server machine description missed. machine group: '%s'", server.Machine))
+	}
+
+	if len(server.Nodes) > smd.MinNum {
+		return errors.New(fmt.Sprintf("The minimal number of consul server is %d, but the number of nodes is %d at least", smd.MinNum, len(server.Nodes)))
+	}
+
+	errs := ""
+	fmt.Printf("Consul server is not exists, a new consul cluster with machine names(%+v) will be created.\n", nodes)
+	var wg sync.WaitGroup
+	for _, node := range nodes {
+		wg.Add(1)
+		go func(ctx *ClusterContext, n string) {
+			defer wg.Done()
+			opts := []string{
+				"--engine-label",
+				"role=consulserver",
+				"--engine-label",
+				"group=consulcluster",
+			}
+			if err := ctx.mProxy.CreateMachine(n, smd, opts); err != nil {
+				fmt.Printf("Failed to create consul server. node:%s, err:%s\n", n, err.Error())
+				errs = errs + "--" + err.Error()
+			} else {
+				fmt.Printf("One consul server created. name:%s\n", n)
+			}
+		}(ctx, node)
+	}
+	wg.Wait()
+
+	if errs != "" {
+		return errors.New(errs)
+	}
+	return nil
+}
+
 func (ctx *ClusterContext) startConsulCluster() error {
 	server := ctx.clusterDesc.ConsulCluster.Server
 	if len(server.IPs) > 0 {
@@ -1162,7 +1222,7 @@ func (ctx *ClusterContext) startConsulCluster() error {
 		return errors.New("Consul server nodes missed.")
 	}
 
-	serverMachineInfos := ctx.getMachines(func(mi *dmachine.MachineInfo) bool {
+	serverMachineInfos, err := ctx.mProxy.Proxy.List(func(mi *dmachine.MachineInfo) bool {
 		for _, node := range nodes {
 			if node == mi.Name {
 				return true
@@ -1170,72 +1230,42 @@ func (ctx *ClusterContext) startConsulCluster() error {
 		}
 		return false
 	})
+	if err != nil {
+		return err
+	}
 	consulServerIPs := []string{}
-	var lock sync.Mutex
 	var wg sync.WaitGroup
 
 	// serverMachineInfos = []dmachine.MachineInfo{}
 	if len(serverMachineInfos) > 0 {
-		ips := []string{}
-		fmt.Printf("Consul server(num:%d) is exists, no need to create consul cluster.\n", len(serverMachineInfos))
-		for _, mInfo := range serverMachineInfos {
-			if !mInfo.IsRunning() {
-				wg.Add(1)
-				fmt.Printf("Consul server '%s' is not running, try to start it.\n")
-				go func(ctx *ClusterContext, mInfo dmachine.MachineInfo) {
-					defer wg.Done()
-					if _, err := ctx.mProxy.Start(mInfo.Name); err == nil {
-						lock.Lock()
-						defer lock.Unlock()
-						ips = append(ips, mInfo.IP)
-					} else {
-						fmt.Printf("Start consule server('%s') failed. err:%s\n", err.Error())
-					}
-				}(ctx, mInfo)
-			} else {
-				lock.Lock()
-				ips = append(ips, mInfo.IP)
-				lock.Unlock()
+		if len(serverMachineInfos) != len(nodes) {
+			return errors.New(fmt.Sprintf("%d consul server expected, but %d found", len(nodes), len(serverMachineInfos)))
+		}
+		stoppedNodes := []string{}
+		for _, m := range serverMachineInfos {
+			if !m.IsRunning() {
+				stoppedNodes = append(stoppedNodes, m.Name)
 			}
+			consulServerIPs = append(consulServerIPs, m.IP)
 		}
-		wg.Wait()
-		fmt.Printf("Consul server ips is:%+v\n", ips)
-		consulServerIPs = ips
+		fmt.Printf("Consul server(num:%d) is exists, %d are stopped and will be restarted.\n", len(serverMachineInfos), len(stoppedNodes))
+		_, err := ctx.mProxy.Start(stoppedNodes...)
+		if err != nil {
+			return err
+		}
 	} else {
-		errs := ""
-		fmt.Printf("Consul server is not exists, creating a new consul cluster with machine names:%+v\n", nodes)
-		for _, node := range nodes {
-			wg.Add(1)
-			go func(ctx *ClusterContext, n string) {
-				defer wg.Done()
-				opts := []string{
-					"--engine-label",
-					"role=consulserver",
-				}
-				if err := ctx.mProxy.CreateMachine(n, opts...); err != nil {
-					fmt.Printf("Failed to create consul server. node:%s, err:%s\n", n, err.Error())
-					errs = errs + "--" + err.Error()
-				} else {
-					fmt.Printf("One consul server created. name:%s\n", n)
-				}
-			}(ctx, node)
-		}
-		wg.Wait()
-
-		if errs != "" {
-			return errors.New(errs)
+		if err := ctx.createConsulClusterServers(nodes); err != nil {
+			return err
 		}
 		fmt.Printf("All Consul server created. names:%+v\n", nodes)
 		serverIPs, err := ctx.mProxy.IPs(nodes)
 		if err != nil {
 			return errors.New("Failed to load consul server ips. err:" + err.Error())
 		}
+		consulServerIPs = serverIPs
 		bootstrapServerNode := nodes[0]
 		bootstrapServerIp := serverIPs[0]
 		fmt.Printf("Run bootstrap consul server on. node:%s, ip:%s\n", bootstrapServerNode, bootstrapServerIp)
-		sleepSeconds := 3 * time.Second
-		fmt.Printf("To ensure the swarm cluster to load the created consul server, sleep 60 seconds\n")
-		time.Sleep(sleepSeconds)
 		if cid, err := ctx.runConsulBootstrapServer(bootstrapServerNode, bootstrapServerIp); err != nil {
 			fmt.Printf("Failed to run bootstrap consul server. node:%s, ip:%s. err:%s\n", bootstrapServerNode, bootstrapServerIp, err.Error())
 			return err
@@ -1266,10 +1296,15 @@ func (ctx *ClusterContext) startConsulCluster() error {
 				return errors.New(errs)
 			}
 		}
-		consulServerIPs = serverIPs
 	}
 	ctx.clusterDesc.ConsulCluster.Server.IPs = consulServerIPs
+	discovery := ctx.clusterDesc.Discovery
+	for i := 0; i < len(consulServerIPs); i++ {
+		discovery = strings.Replace(discovery, nodes[i], consulServerIPs[i], -1)
+	}
+	ctx.clusterDesc.Discovery = discovery
+	ctx.mProxy.Discovery = discovery
 
-	fmt.Printf("Consul server cluster start complete. ips:%+v\n", ctx.clusterDesc.ConsulCluster.Server.IPs)
+	fmt.Printf("Consul server cluster start complete. ips:%+v discovery:%s\n", ctx.clusterDesc.ConsulCluster.Server.IPs, ctx.clusterDesc.Discovery)
 	return nil
 }

@@ -113,6 +113,10 @@ func (d *DockerProxy) RunByConfig(runConfig ContainerRunConfig) (string, error) 
 	hostConfig.PortBindings = portBingds
 	hostConfig.Binds = runConfig.Bindings
 	hostConfig.Dns = runConfig.DNS
+	hostConfig.RestartPolicy = dockerclient.RestartPolicy{
+		Name:              runConfig.RestartPolicy.Name,
+		MaximumRetryCount: int64(runConfig.RestartPolicy.MaxTry),
+	}
 
 	if err := d.StartContainer(cid, hostConfig); err != nil {
 		fmt.Printf("Failed to start container. name:%s, id:%s.\n", runConfig.Name, cid)
