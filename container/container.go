@@ -23,17 +23,23 @@ type ContainerInfo struct {
 	Node    string
 }
 
+type RestartPolicy struct {
+	Name   string
+	MaxTry int
+}
+
 func (info *ContainerInfo) IsUp() bool {
 	return strings.HasPrefix(info.Status, "Up")
 }
 
 type ContainerRunConfig struct {
-	Name         string
-	Image        string
-	PortBindings []dcluster.PortBinding
-	Envs         []string
-	Cmds         []string
-	Hostname     string
-	Bindings     []string
-	DNS          []string
+	Name          string
+	Image         string
+	PortBindings  []dcluster.PortBinding
+	Envs          []string
+	Cmds          []string
+	Hostname      string
+	Bindings      []string
+	DNS           []string
+	RestartPolicy RestartPolicy
 }

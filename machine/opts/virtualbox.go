@@ -6,7 +6,7 @@ import (
 	dcluster "github.com/weibocom/dockerf/cluster"
 )
 
-func (od *OptsDriver) GetVirtualboxOptions(md dcluster.MachineDescription) []string {
+func (od *OptsDriver) GetVirtualboxOptions(md dcluster.MachineDescription) ([]string, error) {
 	options := []string{
 		"--virtualbox-cpu-count",
 		fmt.Sprintf("%d", md.GetCpu()),
@@ -15,5 +15,5 @@ func (od *OptsDriver) GetVirtualboxOptions(md dcluster.MachineDescription) []str
 		"--virtualbox-disk-size",
 		fmt.Sprintf("%d", md.GetDiskCapacityInBytes()/1024/1024),
 	}
-	return options
+	return options, nil
 }

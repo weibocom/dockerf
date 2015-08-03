@@ -56,6 +56,7 @@ func (md *MachineDescription) GetDiskCapacityInBytes() int {
 
 type MachineCluster struct {
 	OS       string
+	Master   MachineDescription
 	Topology map[string]MachineDescription
 }
 
@@ -86,6 +87,7 @@ type ConsulServer struct {
 	Nodes   []string
 	IPs     []string
 	Create  bool
+	Machine string
 }
 
 type ConsulAgent struct {
