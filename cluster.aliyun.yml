@@ -1,0 +1,120 @@
+clusterby: swarm
+master: icy-m-master-1
+discovery: consul://icy-m-consulcluster-1:8500/dockerftest
+
+machine:
+    os: ubuntu-14.04-64
+
+    cloud:
+       aliyun:
+          options: --engine-install-url https://get.daocloud.io/docker/ --engine-insecure-registry 123.57.25.116:5000 --swarm-image 192.168.99.100:5000/icycrystal4/swarm
+          globaloptions: --native-ssh
+       virtualbox:
+          options: --engine-insecure-registry 192.168.99.100:5000 --swarm-image 192.168.99.100:5000/icycrystal4/swarm
+          globaloptions: --native-ssh
+          default: true
+
+    topology:
+       consulcluster:
+          minnum: 1
+          maxnum: 1
+          cpu: 1
+          memory: 1g
+          disk:
+             type: ssd
+             capacity: 20g
+          region: cn-beijing
+          init: touch ~/hello
+          driveropts:
+          consul: false
+          group: icy-m-consulcluster
+
+       master:
+          minnum: 1
+          maxnum: 1
+          cpu: 2
+          memory: 2g
+          disk:
+             type: ssd
+             capacity: 20g
+          region: cn-beijing
+          init: touch ~/hello
+          driveropts:
+          consul: false
+          group: icy-m-master
+
+       frontend:
+          minnum: 1
+          maxnum: 1
+          cpu: 1
+          memory: 1g
+          disk:
+             type: ssd
+             capacity: 10240m
+          region: cn-beijing
+          init: touch ~/hello
+          driveropts:
+          consul: false
+          group: icy-m-frontend
+
+       nginx:
+          minnum: 1
+          maxnum: 1
+          cpu: 1
+          memory: 512m
+          disk:
+             type: ssd
+             capacity: 20g
+          region: cn-beijing
+          init: touch ~/hello
+          driveropts:
+          consul: true
+          group: icy-m-nginx
+
+container:
+   topology:
+       webnginx:
+         port: 8408:8408
+         num: 1
+         image: 192.168.99.100:5000/icycrystal4/wb-nginx:0.6
+         restart: false
+         url: if.nginx
+         machine: nginx
+         volums:
+            - /var:/var
+         group: icy-c-nginx
+
+       # web:
+       #   port: 40000~50000:8080
+       #   num: 1
+       #   image: 192.168.99.100:5000/icycrystal4/tomcat:latest
+       #   prestop: touch ~/503  # execute some shell commands on the machine, not in container, before stop the service 
+       #   poststart: touch ~/200
+       #   restart: false
+       #   servicediscover: webnginx
+       #   machine: frontend
+       #   group: icy-c-web
+
+servicediscover:
+  webnginx:
+    driver: nginx
+    upstream: discover
+    container: webnginx
+
+consulcluster:
+   server:
+      service: weibo
+      image: 192.168.99.100:5000/icycrystal4/progrium-consul:latest
+      domain: weibo
+      ips: 
+         # - 192.168.99.101
+      nodes:
+         - icy-m-consulcluster-1
+         # - consulcluster-2
+         # - consulcluster-3
+      machine: consulcluster
+   agent:
+      image: 192.168.99.100:5000/icycrystal4/progrium-consul:latest
+   registrator:
+      image: 192.168.99.100:5000/icycrystal4/progrium-registrator
+

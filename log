@@ -1,0 +1,101 @@
+Parsing port binding in cluster description.
+Port binding parsed. group: , binding:{Protocal:tcp hostPortRange:{min:8408 max:8408} HostPort:0 ContainerPort:8408}
+Port binding parsed. group: , binding:{Protocal:tcp hostPortRange:{min:40000 max:50000} HostPort:0 ContainerPort:8080}
+Create a new machine proxy. cluster by:swarm, drivers:aliyun,virtualbox, discovery: consul://icy-m-consulcluster-1:8500/dockerftest, master: icy-m-master
+Loading the cluster machine info...
+Init the consule cluster.
+Consul server(num:1) is exists, 0 are stopped and will be restarted.
+Consul server cluster start complete. ips:[] discovery:consul://:8500/dockerftest
+Starting machine master
+Master is not exists on the cluster, creating an new master.
+Create machine. name:icy-m-master, args:[--engine-insecure-registry 192.168.99.100:5000 --swarm-image 192.168.99.100:5000/icycrystal4/swarm create -d virtualbox --swarm --swarm-master --swarm-discovery consul://:8500/dockerftest --engine-label role=master --engine-insecure-registry 192.168.99.100:5000 --swarm-image 192.168.99.100:5000/icycrystal4/swarm --virtualbox-cpu-count 2 --virtualbox-memory 2048 --virtualbox-disk-size 20480 icy-m-master]
+Incorrect Usage.
+
+NAME:
+   dockerf machine - Create and manage machines running Docker.
+
+USAGE:
+   dockerf machine [global options] command [command options] [arguments...]
+   
+VERSION:
+   0.3.0 (HEAD)
+   
+AUTHOR(S):
+   Docker Machine Contributors <https://github.com/docker/machine> 
+   
+COMMANDS:
+   active		Print which machine is active
+   config		Print the connection config for machine
+   create		Create a machine
+   env			Display the commands to set up the environment for the Docker client
+   inspect		Inspect information about a machine
+   ip			Get the IP address of a machine
+   kill			Kill a machine
+   ls			List machines
+   regenerate-certs	Regenerate TLS Certificates for a machine
+   restart		Restart a machine
+   rm			Remove a machine
+   ssh			Log into or run a command on a machine with SSH.
+   scp			Copy files between machines
+   start		Start a machine
+   stop			Stop a machine
+   upgrade		Upgrade a machine to the latest version of Docker
+   url			Get the URL of a machine
+   help, h		Shows a list of commands or help for one command
+   
+GLOBAL OPTIONS:
+   --debug, -D						Enable debug mode
+   -s, --storage-path "/Users/crystal/.docker/machine"	Configures storage path [$MACHINE_STORAGE_PATH]
+   --tls-ca-cert 					CA to verify remotes against [$MACHINE_TLS_CA_CERT]
+   --tls-ca-key 					Private key to generate certificates [$MACHINE_TLS_CA_KEY]
+   --tls-client-cert 					Client cert to use for TLS [$MACHINE_TLS_CLIENT_CERT]
+   --tls-client-key 					Private key used in client TLS auth [$MACHINE_TLS_CLIENT_KEY]
+   --native-ssh						Use the native (Go-based) SSH implementation. [$MACHINE_NATIVE_SSH]
+   --help, -h						show help
+   --version, -v					print the version
+   
+panic: Start cluster master failed: flag provided but not defined: -engine-insecure-registry
+
+goroutine 1 [running]:
+github.com/weibocom/dockerf/cluster/context.(*ClusterContext).initContext(0xc208126120)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:106 +0xaa3
+github.com/weibocom/dockerf/cluster/context.NewClusterContext(0x7f0100000000, 0xc2080fe660, 0x19, 0xc20806a900, 0x0)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:77 +0x371
+github.com/weibocom/dockerf/api/client.(*ClusterCli).CmdDeploy(0xc208040088, 0xc20800a030, 0x3, 0x3, 0x0, 0x0)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/api/client/cmd_cluster.go:104 +0xe1f
+reflect.callMethod(0xc2080fe510, 0xc20813f7b8)
+	/usr/local/Cellar/go/1.4.2/libexec/src/reflect/value.go:605 +0x179
+reflect.methodValueCall(0xc20800a030, 0x3, 0x3, 0x4, 0xc2080fe510, 0xbb01, 0x0, 0x0, 0x20, 0x11838, ...)
+	/usr/local/Cellar/go/1.4.2/libexec/src/reflect/asm_amd64.s:29 +0x36
+github.com/weibocom/dockerf/api/client.(*ClusterCli).Cmd(0xc208040088, 0xc20800a020, 0x4, 0x4, 0x0, 0x0)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/api/client/cmd_cluster.go:62 +0x33a
+github.com/weibocom/dockerf/api/client.(*DockerfCli).CmdCluster(0xc2080fe360, 0xc20800a020, 0x4, 0x4, 0x0, 0x0)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/api/client/cmd_cluster.go:44 +0x11b
+reflect.callMethod(0xc2080fe480, 0xc20813fae8)
+	/usr/local/Cellar/go/1.4.2/libexec/src/reflect/value.go:605 +0x179
+reflect.methodValueCall(0xc20800a020, 0x4, 0x4, 0x1, 0xc2080fe480, 0xc2080fe401, 0xe2eb00, 0x400000000e2e3a0, 0xcbce, 0x0, ...)
+	/usr/local/Cellar/go/1.4.2/libexec/src/reflect/asm_amd64.s:29 +0x36
+github.com/weibocom/dockerf/api/client.(*DockerfCli).Cmd(0xc2080fe360, 0xc20800a010, 0x5, 0x5, 0x0, 0x0)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/api/client/cli.go:54 +0x5ec
+main.main()
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/main.go:61 +0x861
+
+goroutine 5 [syscall]:
+os/signal.loop()
+	/usr/local/Cellar/go/1.4.2/libexec/src/os/signal/signal_unix.go:21 +0x1f
+created by os/signal.init·1
+	/usr/local/Cellar/go/1.4.2/libexec/src/os/signal/signal_unix.go:27 +0x35
+
+goroutine 6 [chan receive]:
+main.func·002()
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/main.go:26 +0xff
+created by main.main
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/main.go:30 +0x33f
+
+goroutine 10 [runnable]:
+text/template/parse.lexText(0xc20802a280, 0xb932c0)
+	/usr/local/Cellar/go/1.4.2/libexec/src/text/template/parse/lex.go:228 +0x37b
+text/template/parse.(*lexer).run(0xc20802a280)
+	/usr/local/Cellar/go/1.4.2/libexec/src/text/template/parse/lex.go:198 +0x5d
+created by text/template/parse.lex
+	/usr/local/Cellar/go/1.4.2/libexec/src/text/template/parse/lex.go:191 +0x1ac
