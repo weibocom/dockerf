@@ -13,13 +13,17 @@ import (
 	"strings"
 )
 
+const SEPARATOR = "&"
+
 // Get signature from params in map
 func MapToSign(params map[string]string, keySecret string, httpMethod string) string {
-	key := []byte(keySecret + "&")
+	key := []byte(keySecret + SEPARATOR)
 	h := hmac.New(sha1.New, key)
 	query := canonicalizedFromMap(params)
-	h.Write([]byte(httpMethod + "&%2F&" + query))
-	sign := PercentEncode(base64.StdEncoding.EncodeToString(h.Sum(nil)))
+	toSign := httpMethod + SEPARATOR + PercentEncode("/") + SEPARATOR + query
+	h.Write([]byte(toSign))
+	sign := base64.StdEncoding.EncodeToString(h.Sum(nil))
+	sign = PercentEncode(sign)
 	return sign
 }
 
@@ -34,7 +38,7 @@ func canonicalizedFromMap(params map[string]string) string {
 	sort.Strings(keys)
 	sign := ""
 	for _, v := range keys {
-		sign += "&" + PercentEncode(v) + "=" + PercentEncode(params[v])
+		sign += SEPARATOR + PercentEncode(v) + "=" + PercentEncode(params[v])
 	}
 	sign = PercentEncode(sign[1:])
 	return sign

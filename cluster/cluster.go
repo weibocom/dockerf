@@ -3,6 +3,7 @@ package cluster
 import (
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	dutils "github.com/weibocom/dockerf/utils"
 	"gopkg.in/yaml.v2"
@@ -23,6 +24,8 @@ type MachineDescription struct {
 	Region     string
 	Consul     bool
 	DriverOpts []string
+	Cloud      string
+	Group      string
 }
 
 func (md *MachineDescription) GetCpu() int {
@@ -54,10 +57,20 @@ func (md *MachineDescription) GetDiskCapacityInBytes() int {
 	}
 }
 
+type CloudDrivers map[string]CloudDriverDescription
+
 type MachineCluster struct {
 	OS       string
-	Master   MachineDescription
+	Cloud    CloudDrivers
 	Topology map[string]MachineDescription
+}
+
+func (cds *CloudDrivers) SurportedDrivers() []string {
+	names := []string{}
+	for name, _ := range *cds {
+		names = append(names, name)
+	}
+	return names
 }
 
 type ContainerCluster struct {
@@ -78,6 +91,27 @@ type ContainerDescription struct {
 	Machine         string
 	PortBinding     PortBinding
 	Volums          []string
+	Group           string
+}
+
+type CloudDriverDescription struct {
+	Options       string
+	GlobalOptions string
+	Default       bool
+}
+
+func (cdd *CloudDriverDescription) GetOptions() []string {
+	if cdd.Options == "" {
+		return []string{}
+	}
+	return strings.Split(cdd.Options, " ")
+}
+
+func (cdd *CloudDriverDescription) GetGlobalOptions() []string {
+	if cdd.GlobalOptions == "" {
+		return []string{}
+	}
+	return strings.Split(cdd.GlobalOptions, " ")
 }
 
 type ConsulServer struct {
@@ -107,12 +141,9 @@ type ConsulDescription struct {
 type ServiceDiscoverDiscription map[string]string
 
 type Cluster struct {
-	ClusterBy     string // such as swarm
-	MasterNode    string
-	Driver        string   // aliyun do virtualbox
-	DriverOptions []string // docker machine create options
-	GlobalOptions []string // docker machine global options
-	Discovery     string
+	ClusterBy string // such as swarm
+	Master    string
+	Discovery string
 
 	Machine   MachineCluster
 	Container ContainerCluster

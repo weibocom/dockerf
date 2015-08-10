@@ -84,8 +84,9 @@ func (ctx *ClusterContext) initContext() {
 	fmt.Printf("Parsing port binding in cluster description.\n")
 	ctx.parsePortBindings()
 
-	fmt.Printf("Create a new machine proxy. cluster by:%s, driver:%s, discovery: %s, master: %s, driver options:%s\n", ctx.clusterDesc.ClusterBy, ctx.clusterDesc.Driver, ctx.clusterDesc.Discovery, ctx.clusterDesc.MasterNode, strings.Join(ctx.clusterDesc.DriverOptions, " "))
-	machineProxy := dmachine.NewMachineClusterProxy("dockerf machine", ctx.clusterDesc.ClusterBy, ctx.clusterDesc.Driver, ctx.clusterDesc.Discovery, ctx.clusterDesc.MasterNode, ctx.clusterDesc.GlobalOptions, ctx.clusterDesc.DriverOptions)
+	supportedDrivers := strings.Join(ctx.clusterDesc.Machine.Cloud.SurportedDrivers(), ",")
+	fmt.Printf("Create a new machine proxy. cluster by:%s, drivers:%s, discovery: %s, master: %s\n", ctx.clusterDesc.ClusterBy, supportedDrivers, ctx.clusterDesc.Discovery, ctx.clusterDesc.Master)
+	machineProxy := dmachine.NewMachineClusterProxy("dockerf machine", ctx.clusterDesc.ClusterBy, ctx.clusterDesc.Discovery, ctx.clusterDesc.Master, ctx.clusterDesc.Machine.Cloud)
 	ctx.mProxy = machineProxy
 
 	fmt.Println("Loading the cluster machine info...")
@@ -337,13 +338,12 @@ func (ctx *ClusterContext) initContainerSequences() error {
 }
 
 func (ctx *ClusterContext) initMachineSequence(mifs []dmachine.MachineInfo) {
-	mn := dmachine.MachineName{}
 	for _, mi := range ctx.machineInfos {
 		if mi.IsMaster() {
 			continue
 		}
-		if mn.Parse(mi.Name) {
-			ctx.mSeq.Max(mn.Seq)
+		if mi.Seq >= 0 {
+			ctx.mSeq.Max(mi.Seq)
 		} else {
 			fmt.Printf("'%s' is not a valid machine name.\n", mi.Name)
 		}
@@ -689,10 +689,23 @@ func (ctx *ClusterContext) nextContainerName(group string) string {
 	return cn.GetName()
 }
 
+func (ctx *ClusterContext) getMachineGroup(cd *dcluster.ContainerDescription) string {
+	machine := cd.Machine
+	md, exists := ctx.clusterDesc.Machine.Topology[machine]
+	if !exists {
+		panic(fmt.Sprintf("Machine description missed: '%s'", machine))
+	}
+	group := md.Group
+	if group == "" {
+		group = machine
+	}
+	return group
+}
+
 func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, group string) {
 	name := ctx.nextContainerName(group)
 	fmt.Printf("Run a new container. name:%s, image:%s, group:%s.\n", name, cd.Image, group)
-	envs := []string{"constraint:role==slave", "constraint:group==" + cd.Machine}
+	envs := []string{"constraint:role==slave", "constraint:group==" + ctx.getMachineGroup(cd)}
 	if cd.URL != "" {
 		url := cd.URL
 		idx := strings.IndexAny(url, ".")
@@ -990,9 +1003,9 @@ func (ctx *ClusterContext) deployContainers() error {
 			if !ok {
 				panic(fmt.Sprintf("No description found for group:%s", group))
 			}
-			fmt.Printf("Deploy container for group:%s. description:%+v\n", group, description)
+			fmt.Printf("Deploy container for group:%s/%s. description:%+v\n", group, description.Group, description)
 			if err := ctx.deployContainersByDescription(group, &description); err != nil {
-				panic(fmt.Sprintf("Failed to deploy container for group:%s. err:%s\n", group, err.Error()))
+				panic(fmt.Sprintf("Failed to deploy container for group:%s/%s. err:%s\n", group, description.Group, err.Error()))
 			}
 		}
 		return nil
@@ -1072,7 +1085,11 @@ func (ctx *ClusterContext) startMachines(group string, machines []dmachine.Machi
 	return running, running - orgRunNum, err
 }
 
-func (ctx *ClusterContext) scaleMachineOutByGroup(group string, md dcluster.MachineDescription) error {
+func (ctx *ClusterContext) scaleMachineOutByGroup(grp string, md dcluster.MachineDescription) error {
+	group := md.Group
+	if group == "" {
+		group = grp
+	}
 	min := md.MinNum
 	machines, err := ctx.mProxy.ListByGroup(group)
 	if err != nil {
@@ -1149,7 +1166,10 @@ func (ctx *ClusterContext) startMaster() error {
 	if !exists {
 		if ctx.create {
 			fmt.Printf("Master is not exists on the cluster, creating an new master.\n")
-			mmd := ctx.clusterDesc.Machine.Master
+			mmd, exists := ctx.clusterDesc.Machine.Topology["master"]
+			if !exists {
+				return fmt.Errorf("master description missed in machine topology.")
+			}
 			if err := ctx.mProxy.CreateMaster(mmd); err != nil {
 				return err
 			}
@@ -1248,7 +1268,7 @@ func (ctx *ClusterContext) startConsulCluster() error {
 			}
 			consulServerIPs = append(consulServerIPs, m.IP)
 		}
-		fmt.Printf("Consul server(num:%d) is exists, %d are stopped and will be restarted.\n", len(serverMachineInfos), len(stoppedNodes))
+		fmt.Printf("Consul server(num:%d) is exists, %d are stopped and will be restarted. ips:%+v\n", len(serverMachineInfos), len(stoppedNodes), consulServerIPs)
 		_, err := ctx.mProxy.Start(stoppedNodes...)
 		if err != nil {
 			return err
