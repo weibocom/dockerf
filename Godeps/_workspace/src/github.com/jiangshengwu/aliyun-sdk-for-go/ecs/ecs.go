@@ -22,7 +22,7 @@ const (
 
 	Version          = "2014-05-26"
 	SignatureMethod  = "HMAC-SHA1"
-	SignatureVersion = "1"
+	SignatureVersion = "1.0"
 )
 
 // struct for ECS client
@@ -128,7 +128,7 @@ func (c *CommonParam) ResolveAllParams(action string, params map[string]string) 
 	if c.ResourceOwnerAccount != "" {
 		params["ResourceOwnerAccount"] = c.ResourceOwnerAccount
 	}
-	params["TimeStamp"] = time.Now().UTC().Format("2006-01-02T15:04:05")
+	params["TimeStamp"] = time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	params["SignatureNonce"] = util.GetGuid()
 	sign := util.MapToSign(params, c.AccessKeySecret, ECSHttpMethod)
 	params["Signature"] = sign

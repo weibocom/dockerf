@@ -209,8 +209,10 @@ func (mp *MachineProxy) List(filter func(mi *MachineInfo) bool) ([]MachineInfo, 
 				if lastField == "(master)" {
 					idx--
 				}
-				mi.Master = fields[idx]
-				idx--
+				if !isUrl(fields[idx]) {
+					mi.Master = fields[idx]
+					idx--
+				}
 			}
 			if idx >= 0 { // idx may be -1 where there are some error machines in the cluster.
 				// url
@@ -220,6 +222,7 @@ func (mp *MachineProxy) List(filter func(mi *MachineInfo) bool) ([]MachineInfo, 
 					mi.IP = ip
 				}
 			}
+			mi.parseName()
 			if filter(&mi) {
 				mis = append(mis, mi)
 			}
@@ -241,4 +244,8 @@ func parseMachineIpFromUrl(machineUrl string) (string, error) {
 		return "", err
 	}
 	return strings.Split(u.Host, ":")[0], nil
+}
+
+func isUrl(url string) bool {
+	return strings.Contains(url, "://")
 }

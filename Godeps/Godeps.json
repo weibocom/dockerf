@@ -330,15 +330,15 @@
 		},
 		{
 			"ImportPath": "github.com/jiangshengwu/aliyun-sdk-for-go/ecs",
-			"Rev": "e6ca5ae556f29594ebaea2b35c85313618d18e07"
+			"Rev": "bd4d8206c2ff6f27174d1ad97051295cac6b6de5"
 		},
 		{
 			"ImportPath": "github.com/jiangshengwu/aliyun-sdk-for-go/log",
-			"Rev": "e6ca5ae556f29594ebaea2b35c85313618d18e07"
+			"Rev": "bd4d8206c2ff6f27174d1ad97051295cac6b6de5"
 		},
 		{
 			"ImportPath": "github.com/jiangshengwu/aliyun-sdk-for-go/util",
-			"Rev": "e6ca5ae556f29594ebaea2b35c85313618d18e07"
+			"Rev": "bd4d8206c2ff6f27174d1ad97051295cac6b6de5"
 		},
 		{
 			"ImportPath": "github.com/mitchellh/mapstructure",
