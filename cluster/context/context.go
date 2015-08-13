@@ -387,6 +387,11 @@ func (ctx *ClusterContext) getConsulPortBindings() []dcluster.PortBinding {
 			ContainerPort: 8301,
 		},
 		dcluster.PortBinding{
+			Protocal:      "udp",
+			HostPort:      8301,
+			ContainerPort: 8301,
+		},
+		dcluster.PortBinding{
 			Protocal:      "tcp",
 			HostPort:      8302,
 			ContainerPort: 8302,
@@ -408,6 +413,11 @@ func (ctx *ClusterContext) getConsulPortBindings() []dcluster.PortBinding {
 		},
 		dcluster.PortBinding{
 			Protocal:      "udp",
+			HostPort:      53,
+			ContainerPort: 53,
+		},
+		dcluster.PortBinding{
+			Protocal:      "tcp",
 			HostPort:      53,
 			ContainerPort: 53,
 		},
@@ -492,7 +502,9 @@ func (ctx *ClusterContext) createPlainDockerProxy(node string) (*dcontainer.Dock
 func (ctx *ClusterContext) runConsulAgent(dockerProxy *dcontainer.DockerProxy, agent dcluster.ConsulAgent, agentNode string, agentIp string) (string, error) {
 	name := fmt.Sprintf("%s-consul-agent", agentNode)
 	serverIp := ctx.clusterDesc.ConsulCluster.Server.IPs[0]
-	envs := []string{}
+	envs := []string{
+		"SERVICE_NAME=consul-agent",
+	}
 	cmds := []string{"-advertise", agentIp, "-join", serverIp}
 
 	portBindings := ctx.getConsulPortBindings()
@@ -1136,11 +1148,23 @@ func (ctx *ClusterContext) scaleMachineOut() error {
 		fmt.Printf("No need to scale machine out.\n")
 		return nil
 	}
+	var wg sync.WaitGroup
+	errs := []string{}
 	for group, md := range ctx.clusterDesc.Machine.Topology {
-		if err := ctx.scaleMachineOutByGroup(group, md); err != nil {
-			return err
-		}
+		wg.Add(1)
+		go func(group string, md dcluster.MachineDescription) {
+			defer wg.Done()
+			if err := ctx.scaleMachineOutByGroup(group, md); err != nil {
+				errs = append(errs, err.Error())
+			}
+			fmt.Printf("Scale machine out for group '%s' complete \n", group)
+		}(group, md)
 	}
+	wg.Wait()
+	if len(errs) > 0 {
+		return fmt.Errorf("Scale machine out error:%+v", errs)
+	}
+	fmt.Printf("Scale machine out complete.\n")
 	return nil
 }
 
@@ -1266,13 +1290,18 @@ func (ctx *ClusterContext) startConsulCluster() error {
 			if !m.IsRunning() {
 				stoppedNodes = append(stoppedNodes, m.Name)
 			}
-			consulServerIPs = append(consulServerIPs, m.IP)
 		}
-		fmt.Printf("Consul server(num:%d) is exists, %d are stopped and will be restarted. ips:%+v\n", len(serverMachineInfos), len(stoppedNodes), consulServerIPs)
-		_, err := ctx.mProxy.Start(stoppedNodes...)
-		if err != nil {
+		fmt.Printf("Consul server(num:%d) is exists, %d are stopped and will be restarted. \n", len(serverMachineInfos), len(stoppedNodes))
+		if len(stoppedNodes) > 0 {
+			_, err := ctx.mProxy.Start(stoppedNodes...)
+			if err != nil {
+				return err
+			}
+		}
+		if consulServerIPs, err = ctx.mProxy.IPs(server.Nodes); err != nil {
 			return err
 		}
+
 	} else {
 		if err := ctx.createConsulClusterServers(nodes); err != nil {
 			return err
