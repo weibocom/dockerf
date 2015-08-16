@@ -5,7 +5,7 @@ package drivers
 // 	consul "github.com/hashicorp/consul/api"
 // 	"github.com/weibocom/dockerf/cluster"
 // 	"github.com/weibocom/dockerf/discovery"
-// 	dutils "github.com/weibocom/dockerf/utils"
+// 	dutils "github.com/weibocom/dockerf/dlog"
 // 	"strconv"
 // 	"strings"
 // )
