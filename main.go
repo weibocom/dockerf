@@ -57,6 +57,7 @@ func main() {
 		os.Setenv("DEBUG", "1")
 		setLogLevel(logrus.DebugLevel)
 	}
+	initLogging()
 	cli := client.GetDockerfCli()
 	if err := cli.Cmd(flag.DFlag.Args()...); err != nil {
 		logrus.Fatal(err)

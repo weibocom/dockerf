@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/codegangsta/cli"
-	dutils "github.com/weibocom/dockerf/utils"
+	dutils "github.com/weibocom/dockerf/dlog"
 )
 
 type MachineProxy struct {
