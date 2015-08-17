@@ -1,84 +1,98 @@
-Parsing port binding in cluster description.
-Port binding parsed. group: , binding:{Protocal:tcp hostPortRange:{min:8408 max:8408} HostPort:0 ContainerPort:8408}
-Port binding parsed. group: , binding:{Protocal:tcp hostPortRange:{min:40000 max:50000} HostPort:0 ContainerPort:8080}
-Create a new machine proxy. cluster by:swarm, drivers:aliyun,virtualbox, discovery: consul://icy-m-consulcluster-1:8500/dockerftest, master: icy-m-master
-Loading the cluster machine info...
-Init the consule cluster.
-Consul server(num:1) is exists, 0 are stopped and will be restarted.
-Consul server cluster start complete. ips:[] discovery:consul://:8500/dockerftest
-Starting machine master
-Master is not exists on the cluster, creating an new master.
-Create machine. name:icy-m-master, args:[--engine-insecure-registry 192.168.99.100:5000 --swarm-image 192.168.99.100:5000/icycrystal4/swarm create -d virtualbox --swarm --swarm-master --swarm-discovery consul://:8500/dockerftest --engine-label role=master --engine-insecure-registry 192.168.99.100:5000 --swarm-image 192.168.99.100:5000/icycrystal4/swarm --virtualbox-cpu-count 2 --virtualbox-memory 2048 --virtualbox-disk-size 20480 icy-m-master]
-Incorrect Usage.
+time="2015-08-16T18:59:37+08:00" level=info msg="Parsing port binding in cluster description." 
+time="2015-08-16T18:59:37+08:00" level=debug msg="Port binding parsed. group: icy-c-nginx, binding:{Protocal:tcp hostPortRange:{min:8408 max:8408} HostPort:0 ContainerPort:8408}\n" 
+time="2015-08-16T18:59:37+08:00" level=debug msg="Port binding parsed. group: icy-c-web, binding:{Protocal:tcp hostPortRange:{min:40000 max:50000} HostPort:0 ContainerPort:8080}\n" 
+time="2015-08-16T18:59:37+08:00" level=info msg="Init container description" 
+time="2015-08-16T18:59:37+08:00" level=debug msg="Initing service discovery container description." 
+time="2015-08-16T18:59:37+08:00" level=debug msg="init service discovery container description. group:icy-c-nginx. level:1" 
+time="2015-08-16T18:59:37+08:00" level=debug msg="Service discovery container description inited." 
+time="2015-08-16T18:59:37+08:00" level=debug msg="Initing biz container description." 
+time="2015-08-16T18:59:37+08:00" level=debug msg="biz container description inited. [{Num:1 Image:123.57.88.212:5000/icycrystal4/wb-nginx:0.6 PreStop: PostStart: URL:if.nginx Port:8408:8408 Deps:[] ServiceDiscover: Restart:false Machine:icy-m-nginx PortBinding:{Protocal:tcp hostPortRange:{min:8408 max:8408} HostPort:0 ContainerPort:8408} Volums:[/var:/var] Group:icy-c-nginx DepLevel:1 Type:1} {Num:1 Image:123.57.88.212:5000/icycrystal4/tomcat:latest PreStop:touch ~/503 PostStart:touch ~/200 URL: Port:40000~50000:8080 Deps:[] ServiceDiscover:webnginx Restart:true Machine:icy-m-frontend PortBinding:{Protocal:tcp hostPortRange:{min:40000 max:50000} HostPort:0 ContainerPort:8080} Volums:[] Group:icy-c-web DepLevel:1 Type:2}]" 
+time="2015-08-16T18:59:37+08:00" level=info msg="Create a new machine proxy. cluster by:swarm, supported drivers:aliyun,virtualbox, discovery: consul://icy-m-consulcluster-1:8500/dockerftest, master: icy-m-master-1\n" 
+time="2015-08-16T18:59:38+08:00" level=info msg="ensure machine compacity." 
+Start stopped machines for group:icy-m-nginx
+Enough node running, no need to start extra machines. group:icy-m-nginx, running:1, max:1
+Start machines complete for group:icy-m-nginx. running:1, need: 1
+Running machines num is enough(1) for the cluster minimal need(1)
+Scale machine out for group 'icy-m-nginx' complete 
+Start stopped machines for group:icy-m-master
+Enough node running, no need to start extra machines. group:icy-m-master, running:1, max:1
+Start machines complete for group:icy-m-master. running:1, need: 1
+Running machines num is enough(1) for the cluster minimal need(1)
+Scale machine out for group 'icy-m-master' complete 
+Start stopped machines for group:icy-m-frontend
+Enough node running, no need to start extra machines. group:icy-m-frontend, running:1, max:1
+Start machines complete for group:icy-m-frontend. running:1, need: 1
+Running machines num is enough(1) for the cluster minimal need(1)
+Scale machine out for group 'icy-m-frontend' complete 
+Start stopped machines for group:icy-m-consulcluster
+Enough node running, no need to start extra machines. group:icy-m-consulcluster, running:1, max:1
+Start machines complete for group:icy-m-consulcluster. running:1, need: 1
+Running machines num is enough(1) for the cluster minimal need(1)
+Scale machine out for group 'icy-m-consulcluster' complete 
+Scale machine out complete.
+No need to scale in.
+time="2015-08-16T18:59:39+08:00" level=info msg="Loading the cluster machine info..." 
+time="2015-08-16T18:59:39+08:00" level=info msg="Init the consule cluster." 
+Consul server(num:1) is exists, 0 are stopped and will be restarted. 
+Consul server cluster start complete. ips:[101.200.173.242] discovery:consul://101.200.173.242:8500/dockerftest
+time="2015-08-16T18:59:40+08:00" level=info msg="Starting machine master" 
+time="2015-08-16T18:59:40+08:00" level=info msg="Init the named machine sequence..." 
+Named Machine info sequences inited:0
+time="2015-08-16T18:59:40+08:00" level=info msg="Loading all filtered container infos... " 
+Load containers: [], filters: map[] 
+time="2015-08-16T18:59:40+08:00" level=info msg="Init container sequences." 
+Named Container info sequences inited:map[]
+time="2015-08-16T18:59:40+08:00" level=info msg="Init service discovery." 
+time="2015-08-16T18:59:40+08:00" level=debug msg="the container description for type '1' is [{Num:1 Image:123.57.88.212:5000/icycrystal4/wb-nginx:0.6 PreStop: PostStart: URL:if.nginx Port:8408:8408 Deps:[] ServiceDiscover: Restart:false Machine:icy-m-nginx PortBinding:{Protocal:tcp hostPortRange:{min:8408 max:8408} HostPort:0 ContainerPort:8408} Volums:[/var:/var] Group:icy-c-nginx DepLevel:1 Type:1}]" 
+time="2015-08-16T18:59:40+08:00" level=debug msg="deploying all service discovery related container. len:1" 
+time="2015-08-16T18:59:40+08:00" level=debug msg="deploy service discovery container. group:icy-c-nginx" 
+time="2015-08-16T18:59:40+08:00" level=debug msg="The running num of group 'icy-c-nginx' is 0" 
+time="2015-08-16T18:59:40+08:00" level=debug msg="No running container for group icy-c-nginx is available. " 
+time="2015-08-16T18:59:40+08:00" level=debug msg="1 container will be created and run of group 'icy-c-nginx'.\n" 
+Run a new container. name:icy-c-nginx-1, image:123.57.88.212:5000/icycrystal4/wb-nginx:0.6, group:icy-c-nginx.
+Create a new contianer. name:icy-c-nginx-1. container config:&{Hostname: Domainname: User: AttachStdin:false AttachStdout:false AttachStderr:false ExposedPorts:map[8408/tcp:{}] Tty:false OpenStdin:false StdinOnce:false Env:[constraint:role==slave constraint:group==icy-m-nginx SERVICE_TAGS=if SERVICE_NAME=nginx] Cmd:[] Image:123.57.88.212:5000/icycrystal4/wb-nginx:0.6 Volumes:map[] VolumeDriver: WorkingDir: Entrypoint:[] NetworkDisabled:false MacAddress: OnBuild:[] Labels:map[] Memory:0 MemorySwap:0 CpuShares:0 Cpuset: PortSpecs:[] HostConfig:{Binds:[] ContainerIDFile: LxcConf:[] Memory:0 MemorySwap:0 CpuShares:0 CpuPeriod:0 CpusetCpus: CpusetMems: CpuQuota:0 BlkioWeight:0 OomKillDisable:false Privileged:false PortBindings:map[] Links:[] PublishAllPorts:false Dns:[] DnsSearch:[] ExtraHosts:[] VolumesFrom:[] Devices:[] NetworkMode: IpcMode: PidMode: UTSMode: CapAdd:[] CapDrop:[] RestartPolicy:{Name: MaximumRetryCount:0} SecurityOpt:[] ReadonlyRootfs:false Ulimits:[] LogConfig:{Type: Config:map[]} CgroupParent:}}
+panic: Failed to run a container. name: icy-c-nginx-1, error: Failed to create a container. name: icy-c-nginx-1, error: 500 Internal Server Error: unable to find a node that satisfies role==slave
 
-NAME:
-   dockerf machine - Create and manage machines running Docker.
 
-USAGE:
-   dockerf machine [global options] command [command options] [arguments...]
-   
-VERSION:
-   0.3.0 (HEAD)
-   
-AUTHOR(S):
-   Docker Machine Contributors <https://github.com/docker/machine> 
-   
-COMMANDS:
-   active		Print which machine is active
-   config		Print the connection config for machine
-   create		Create a machine
-   env			Display the commands to set up the environment for the Docker client
-   inspect		Inspect information about a machine
-   ip			Get the IP address of a machine
-   kill			Kill a machine
-   ls			List machines
-   regenerate-certs	Regenerate TLS Certificates for a machine
-   restart		Restart a machine
-   rm			Remove a machine
-   ssh			Log into or run a command on a machine with SSH.
-   scp			Copy files between machines
-   start		Start a machine
-   stop			Stop a machine
-   upgrade		Upgrade a machine to the latest version of Docker
-   url			Get the URL of a machine
-   help, h		Shows a list of commands or help for one command
-   
-GLOBAL OPTIONS:
-   --debug, -D						Enable debug mode
-   -s, --storage-path "/Users/crystal/.docker/machine"	Configures storage path [$MACHINE_STORAGE_PATH]
-   --tls-ca-cert 					CA to verify remotes against [$MACHINE_TLS_CA_CERT]
-   --tls-ca-key 					Private key to generate certificates [$MACHINE_TLS_CA_KEY]
-   --tls-client-cert 					Client cert to use for TLS [$MACHINE_TLS_CLIENT_CERT]
-   --tls-client-key 					Private key used in client TLS auth [$MACHINE_TLS_CLIENT_KEY]
-   --native-ssh						Use the native (Go-based) SSH implementation. [$MACHINE_NATIVE_SSH]
-   --help, -h						show help
-   --version, -v					print the version
-   
-panic: Start cluster master failed: flag provided but not defined: -engine-insecure-registry
+goroutine 25 [running]:
+github.com/weibocom/dockerf/cluster/context.(*ClusterContext).runContainer(0xc20810dc20, 0xc208074a00, 0xc2080906a0, 0xb)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:758 +0xf90
+github.com/weibocom/dockerf/cluster/context.func·010(0xc2080906a0, 0xb, 0xc208074a00)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:926 +0x7a
+created by github.com/weibocom/dockerf/cluster/context.(*ClusterContext).scaleOutContainersByDescription
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:927 +0x96a
 
-goroutine 1 [running]:
-github.com/weibocom/dockerf/cluster/context.(*ClusterContext).initContext(0xc208126120)
-	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:106 +0xaa3
-github.com/weibocom/dockerf/cluster/context.NewClusterContext(0x7f0100000000, 0xc2080fe660, 0x19, 0xc20806a900, 0x0)
-	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:77 +0x371
-github.com/weibocom/dockerf/api/client.(*ClusterCli).CmdDeploy(0xc208040088, 0xc20800a030, 0x3, 0x3, 0x0, 0x0)
+goroutine 1 [runnable]:
+sync.(*WaitGroup).Wait(0xc2080c3080)
+	/usr/local/Cellar/go/1.4.2/libexec/src/sync/waitgroup.go:132 +0x169
+github.com/weibocom/dockerf/cluster/context.(*ClusterContext).scaleOutContainersByDescription(0xc20810dc20, 0xc208074a00, 0x0, 0x0)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:929 +0x9ae
+github.com/weibocom/dockerf/cluster/context.(*ClusterContext).deployContainersByDescription(0xc20810dc20, 0xc208074a00, 0x0, 0x0)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:978 +0xd4
+github.com/weibocom/dockerf/cluster/context.(*ClusterContext).initServiceDiscovery(0xc20810dc20, 0x0, 0x0)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:214 +0x42e
+github.com/weibocom/dockerf/cluster/context.(*ClusterContext).initContext(0xc20810dc20)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:147 +0x1b89
+github.com/weibocom/dockerf/cluster/context.NewClusterContext(0x7f0101000100, 0xc20810e7b0, 0x19, 0xc20806ea00, 0x0)
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/cluster/context/context.go:80 +0x371
+github.com/weibocom/dockerf/api/client.(*ClusterCli).CmdDeploy(0xc2080400b0, 0xc20800a060, 0x5, 0x5, 0x0, 0x0)
 	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/api/client/cmd_cluster.go:104 +0xe1f
-reflect.callMethod(0xc2080fe510, 0xc20813f7b8)
+reflect.callMethod(0xc20810e660, 0xc2081377b8)
 	/usr/local/Cellar/go/1.4.2/libexec/src/reflect/value.go:605 +0x179
-reflect.methodValueCall(0xc20800a030, 0x3, 0x3, 0x4, 0xc2080fe510, 0xbb01, 0x0, 0x0, 0x20, 0x11838, ...)
+reflect.methodValueCall(0xc20800a060, 0x5, 0x5, 0x6, 0xc20810e660, 0xbc01, 0x0, 0x0, 0x20, 0x118e8, ...)
 	/usr/local/Cellar/go/1.4.2/libexec/src/reflect/asm_amd64.s:29 +0x36
-github.com/weibocom/dockerf/api/client.(*ClusterCli).Cmd(0xc208040088, 0xc20800a020, 0x4, 0x4, 0x0, 0x0)
+github.com/weibocom/dockerf/api/client.(*ClusterCli).Cmd(0xc2080400b0, 0xc20800a050, 0x6, 0x6, 0x0, 0x0)
 	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/api/client/cmd_cluster.go:62 +0x33a
-github.com/weibocom/dockerf/api/client.(*DockerfCli).CmdCluster(0xc2080fe360, 0xc20800a020, 0x4, 0x4, 0x0, 0x0)
+github.com/weibocom/dockerf/api/client.(*DockerfCli).CmdCluster(0xc20810e480, 0xc20800a050, 0x6, 0x6, 0x0, 0x0)
 	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/api/client/cmd_cluster.go:44 +0x11b
-reflect.callMethod(0xc2080fe480, 0xc20813fae8)
+reflect.callMethod(0xc20810e5d0, 0xc208137ae8)
 	/usr/local/Cellar/go/1.4.2/libexec/src/reflect/value.go:605 +0x179
-reflect.methodValueCall(0xc20800a020, 0x4, 0x4, 0x1, 0xc2080fe480, 0xc2080fe401, 0xe2eb00, 0x400000000e2e3a0, 0xcbce, 0x0, ...)
+reflect.methodValueCall(0xc20800a050, 0x6, 0x6, 0x1, 0xc20810e5d0, 0xc208137b01, 0x9f40, 0xc501b, 0xe414f0, 0xffffffff, ...)
 	/usr/local/Cellar/go/1.4.2/libexec/src/reflect/asm_amd64.s:29 +0x36
-github.com/weibocom/dockerf/api/client.(*DockerfCli).Cmd(0xc2080fe360, 0xc20800a010, 0x5, 0x5, 0x0, 0x0)
+github.com/weibocom/dockerf/api/client.(*DockerfCli).Cmd(0xc20810e480, 0xc20800a040, 0x7, 0x7, 0x0, 0x0)
 	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/api/client/cli.go:54 +0x5ec
 main.main()
-	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/main.go:61 +0x861
+	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/main.go:62 +0x866
 
 goroutine 5 [syscall]:
 os/signal.loop()
@@ -92,10 +106,14 @@ main.func·002()
 created by main.main
 	/Users/crystal/weibo/dockerf/src/github.com/weibocom/dockerf/main.go:30 +0x33f
 
-goroutine 10 [runnable]:
-text/template/parse.lexText(0xc20802a280, 0xb932c0)
-	/usr/local/Cellar/go/1.4.2/libexec/src/text/template/parse/lex.go:228 +0x37b
-text/template/parse.(*lexer).run(0xc20802a280)
-	/usr/local/Cellar/go/1.4.2/libexec/src/text/template/parse/lex.go:198 +0x5d
-created by text/template/parse.lex
-	/usr/local/Cellar/go/1.4.2/libexec/src/text/template/parse/lex.go:191 +0x1ac
+goroutine 23 [runnable]:
+net/http.(*persistConn).readLoop(0xc20809c4d0)
+	/usr/local/Cellar/go/1.4.2/libexec/src/net/http/transport.go:928 +0x9ce
+created by net/http.(*Transport).dialConn
+	/usr/local/Cellar/go/1.4.2/libexec/src/net/http/transport.go:660 +0xc9f
+
+goroutine 24 [select]:
+net/http.(*persistConn).writeLoop(0xc20809c4d0)
+	/usr/local/Cellar/go/1.4.2/libexec/src/net/http/transport.go:945 +0x41d
+created by net/http.(*Transport).dialConn
+	/usr/local/Cellar/go/1.4.2/libexec/src/net/http/transport.go:661 +0xcbc

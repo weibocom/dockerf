@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	NGINX_DRIVER_NAME = "nginx"
+	NGINX_DRIVER_NAME = "nginx-push"
 )
 
 type NginxServiceRegisterDriver struct {
@@ -35,7 +35,7 @@ func newNginxDriver(driverConfig cluster.ServiceDiscoverDiscription) (*discovery
 	}
 
 	transport := &dutils.Transport{
-		ConnectTimeout:        1 * time.Second,
+		ConnectTimeout:        3 * time.Second,
 		RequestTimeout:        10 * time.Second,
 		ResponseHeaderTimeout: 5 * time.Second,
 	}
@@ -66,6 +66,7 @@ func (ngxDrv *NginxServiceRegisterDriver) buildError(prefix string, errs map[str
 }
 
 func (ngxDrv *NginxServiceRegisterDriver) Register(host string, port int) error {
+	fmt.Printf("Register service to nginx. nginx url:%+v, host:%s, port:%d\n", ngxDrv.urls, host, port)
 	address := fmt.Sprintf("%s:%d", host, port)
 	body := fmt.Sprintf("{\"upstream\":\"%s\",\"server\":[\"%s\"],\"method\":\"add\"}", ngxDrv.upstream, address)
 	errChans := make(map[string]chan error)
@@ -89,19 +90,7 @@ func (ngxDrv *NginxServiceRegisterDriver) Register(host string, port int) error 
 	if len(errs) > 0 {
 		return ngxDrv.buildError("Nginx register error", errs)
 	}
-	// req, _ := http.NewRequest("POST", fmt.Sprintf("http://%s/upstream_add_server", ngxDrv.urls), strings.NewReader(body))
-	// resp, err := ngxDrv.httpClient.Do(req)
-	// defer resp.Body.Close()
-	// if err != nil {
-	// 	fmt.Println(fmt.Sprintf("Register error, error: %s, body: %s", err.Error(), body))
-	// 	return err
-	// }
-	// b, err := ioutil.ReadAll(resp.Body)
-	// if err != nil {
-	// 	fmt.Println(fmt.Sprintf("Read response from nginx error, error: %s", err.Error()))
-	// 	return err
-	// }
-	// fmt.Println(string(b))
+	fmt.Printf("Successfully Register service to nginx. nginx url:%+v, host:%s, port:%d\n", ngxDrv.urls, host, port)
 	return nil
 }
 
@@ -121,7 +110,7 @@ func (ngxDrv *NginxServiceRegisterDriver) register0(body string, url string, err
 		errChan <- err
 		return
 	}
-	fmt.Println(fmt.Sprintf("Register node to nginx, result: %s", string(b)))
+	fmt.Println(fmt.Sprintf("Register node to nginx, result.  %s", string(b)))
 	resp.Body.Close()
 	errChan <- nil
 }
