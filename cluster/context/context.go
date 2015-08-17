@@ -706,6 +706,7 @@ func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, group
 	name := ctx.nextContainerName(group)
 	fmt.Printf("Run a new container. name:%s, image:%s, group:%s.\n", name, cd.Image, group)
 	envs := []string{"constraint:role==slave", "constraint:group==" + ctx.getMachineGroup(cd)}
+	envs = append(envs, cd.Env...)
 	if cd.URL != "" {
 		url := cd.URL
 		idx := strings.IndexAny(url, ".")

@@ -92,6 +92,7 @@ type ContainerDescription struct {
 	PortBinding     PortBinding
 	Volums          []string
 	Group           string
+	Env             []string
 }
 
 type CloudDriverDescription struct {
