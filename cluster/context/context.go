@@ -6,15 +6,18 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	// "github.com/docker/docker/opts"
+	log "github.com/Sirupsen/logrus"
 	dcluster "github.com/weibocom/dockerf/cluster"
 	dcontainer "github.com/weibocom/dockerf/container"
 	dcontainerfilter "github.com/weibocom/dockerf/container/filter"
 	"github.com/weibocom/dockerf/discovery"
+	"github.com/weibocom/dockerf/dlog"
 	dmachine "github.com/weibocom/dockerf/machine"
 	"github.com/weibocom/dockerf/sequence"
 	dutils "github.com/weibocom/dockerf/utils"
@@ -81,27 +84,30 @@ func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilt
 
 // init the exists machine, container, and seq
 func (ctx *ClusterContext) initContext() {
-	fmt.Printf("Parsing port binding in cluster description.\n")
+	log.Info("Parsing port binding in cluster description.")
 	ctx.parsePortBindings()
 
+	log.Info("Init container description")
+	ctx.initContainerDescription()
+
 	supportedDrivers := strings.Join(ctx.clusterDesc.Machine.Cloud.SurportedDrivers(), ",")
-	fmt.Printf("Create a new machine proxy. cluster by:%s, drivers:%s, discovery: %s, master: %s\n", ctx.clusterDesc.ClusterBy, supportedDrivers, ctx.clusterDesc.Discovery, ctx.clusterDesc.Master)
+	log.Infof("Create a new machine proxy. cluster by:%s, supported drivers:%s, discovery: %s, master: %s\n", ctx.clusterDesc.ClusterBy, supportedDrivers, ctx.clusterDesc.Discovery, ctx.clusterDesc.Master)
 	machineProxy := dmachine.NewMachineClusterProxy("dockerf machine", ctx.clusterDesc.ClusterBy, ctx.clusterDesc.Discovery, ctx.clusterDesc.Master, ctx.clusterDesc.Machine.Cloud)
 	ctx.mProxy = machineProxy
 
-	fmt.Println("Loading the cluster machine info...")
+	log.Info("Loading the cluster machine info...")
 	mis, err := ctx.mProxy.List()
 	if err != nil {
 		panic("Init cluster context error, cannot list machine infos:" + err.Error())
 	}
 	ctx.machineInfos = mis
 
-	fmt.Printf("Init the consule cluster.\n")
+	log.Info("Init the consule cluster.")
 	if err := ctx.startConsulCluster(); err != nil {
 		panic("Start consul cluster failed: " + err.Error())
 	}
 
-	fmt.Printf("Starting machine master\n")
+	log.Info("Starting machine master")
 	if err := ctx.startMaster(); err != nil {
 		panic("Start cluster master failed: " + err.Error())
 	}
@@ -119,25 +125,30 @@ func (ctx *ClusterContext) initContext() {
 
 	ctx.containerFilterChain = dcontainerfilter.NewFilterChain(ctx.cProxy)
 
-	fmt.Println("Init the named machine sequence...")
+	log.Info("Init the named machine sequence...")
 	ctx.initMachineSequence(mis)
 
-	fmt.Printf("Loading all filtered container infos... \n")
+	log.Info("Loading all filtered container infos... ")
 	if err := ctx.loadContainers(); err != nil {
 		panic("Init cluster context error, cannot list container infos:" + err.Error())
 	}
 
-	fmt.Printf("Init container sequences.\n")
+	log.Info("Init container sequences.")
 	if err := ctx.initContainerSequences(); err != nil {
 		panic("Init cluster context error, cannot init container seqs:" + err.Error())
 	}
 
-	fmt.Printf("Init service discovery:%+v\n", ctx.clusterDesc.ServiceDiscover)
-	if err := ctx.initServiceDiscovery(ctx.containerInfos); err != nil {
+	log.Infof("ensure machine compacity.")
+	if err := ctx.ensureMachineCapacity(); err != nil {
+		panic("Ensure machine capacity error:%s" + err.Error())
+	}
+
+	log.Info("Init service discovery.")
+	if err := ctx.initServiceDiscovery(); err != nil {
 		panic("Init service discovery failed:" + err.Error())
 	}
 
-	fmt.Println("cluster context inited successfully")
+	log.Info("cluster context inited successfully")
 }
 
 func (ctx *ClusterContext) parsePortBindings() error {
@@ -148,7 +159,7 @@ func (ctx *ClusterContext) parsePortBindings() error {
 		}
 		description.PortBinding = binding
 		ctx.clusterDesc.Container.Topology[group] = description
-		fmt.Printf("Port binding parsed. group: %s, binding:%+v\n", description.Name, binding)
+		log.Debugf("Port binding parsed. group: %s, binding:%+v\n", description.Group, binding)
 	}
 	return nil
 }
@@ -195,15 +206,28 @@ func (ctx *ClusterContext) getContainerByNode(node string) []dcontainer.Containe
 	return containers
 }
 
-func (ctx *ClusterContext) initServiceDiscovery(cinfos []dcontainer.ContainerInfo) error {
-	loadRegistry := func(group string, description dcluster.ContainerDescription, infos []dcontainer.ContainerInfo) []string {
+func (ctx *ClusterContext) initServiceDiscovery() error {
+	descriptions := ctx.getSortedSDDescriptionByType()
+	log.Debugf("deploying all service discovery related container. len:%d", len(descriptions))
+	for _, description := range descriptions {
+		log.Debugf("deploy service discovery container. group:%s", description.Group)
+		ctx.deployContainersByDescription(&description)
+	}
+
+	log.Debugf("loading all container infos.")
+	cinfos, err := ctx.loadAllContainers()
+	if err != nil {
+		return err
+	}
+	loadRegistry := func(group string, description *dcluster.ContainerDescription, infos []dcontainer.ContainerInfo) []string {
 		ipPorts := []string{}
 		for _, c := range infos {
 			if c.Group != group {
 				continue
 			}
 			if !c.IsUp() {
-				fmt.Printf("Container '%s' found for group '%s', but container is not up.\n", c.Name[0], c.Group)
+				log.Debugf("Container '%s' found for group '%s', but container is not up.\n", c.Name[0], c.Group)
+				continue
 			}
 			for _, iPort := range c.IpPorts {
 				if iPort.PrivatePort != description.PortBinding.ContainerPort {
@@ -222,10 +246,10 @@ func (ctx *ClusterContext) initServiceDiscovery(cinfos []dcontainer.ContainerInf
 			return errors.New(fmt.Sprintf("Failed to create Reg Driver:'%s'. err:%s", sdName, err.Error()))
 		}
 		containerGroup, ok := sdd["container"]
-		fmt.Printf("Load registry for '%s'\n", containerGroup)
+		log.Debugf("Load registry for '%s'\n", containerGroup)
 		if ok {
 			fmt.Printf("Load registry for service discover. sd name: '%s', group: '%s'.\n", sdName, containerGroup)
-			description, exists := ctx.clusterDesc.Container.Topology[containerGroup]
+			description, exists := ctx.clusterDesc.Container.Topology.GetDescription(containerGroup)
 			if !exists {
 				panic(fmt.Sprintf("No container description found for group '%s'", containerGroup))
 			}
@@ -237,7 +261,7 @@ func (ctx *ClusterContext) initServiceDiscovery(cinfos []dcontainer.ContainerInf
 				(*driver).Registry(ipPorts)
 			}
 		}
-		fmt.Printf("Service discover registered: name:%s. \n", sdName)
+		fmt.Printf("Service discover registered name:%s. \n", sdName)
 		ctx.serviceRegistries[sdName] = driver
 	}
 	return nil
@@ -260,21 +284,26 @@ func (ctx *ClusterContext) registerServiceByContainer(c *dcontainer.ContainerInf
 	}(c)
 
 	if !find {
-		return errors.New(fmt.Sprintf("Container is not expose any port as a service. (container name:%s, description:%s)", c.Name[0], cd.Name))
+		return errors.New(fmt.Sprintf("Container is not expose any port as a service. (container name:%s, description:%s)", c.Name[0], cd.Group))
 	}
 
 	driver, ok := ctx.serviceRegistries[cd.ServiceDiscover]
 	if !ok {
 		return errors.New(fmt.Sprintf("No service register driver available for:'%s'\n", cd.ServiceDiscover))
 	}
-	return (*driver).Register(host, port)
+	if err := (*driver).Register(host, port); err != nil {
+		return err
+	}
+	log.Infof("Container service successfully registered. cid:%s, name:%s, host:%s, ip:%d\n", c.ID, c.Name[0], host, port)
+	return nil
 }
 
 func (ctx *ClusterContext) registerServiceByContainerId(cid string, cd *dcluster.ContainerDescription) error {
 	if cd.ServiceDiscover == "" {
-		fmt.Printf("Service discover missed, there is not need to register. cid:%s\n", cid)
+		log.Warnf("Service discover missed, there is not need to register. cid:%s", cid)
+		return nil
 	}
-	fmt.Printf("Registering container service: cid:%s, description:%s\n, ", cid, cd)
+	log.Debugf("Registering container service: cid:%s", cid)
 
 	c, exists := ctx.cProxy.GetContainerByID(cid)
 	if !exists {
@@ -361,11 +390,6 @@ func (ctx *ClusterContext) getMaster() (dmachine.MachineInfo, bool) {
 }
 
 func (ctx *ClusterContext) Deploy() error {
-	if err := ctx.ensureMachineCapacity(); err != nil {
-		fmt.Printf("Ensure machine capacity error:%s\n", err.Error())
-		os.Exit(1)
-	}
-
 	if err := ctx.deployContainers(); err != nil {
 		fmt.Printf("Deploy container error:%s\n", err.Error())
 		os.Exit(1)
@@ -383,6 +407,11 @@ func (ctx *ClusterContext) getConsulPortBindings() []dcluster.PortBinding {
 		},
 		dcluster.PortBinding{
 			Protocal:      "tcp",
+			HostPort:      8301,
+			ContainerPort: 8301,
+		},
+		dcluster.PortBinding{
+			Protocal:      "udp",
 			HostPort:      8301,
 			ContainerPort: 8301,
 		},
@@ -408,6 +437,11 @@ func (ctx *ClusterContext) getConsulPortBindings() []dcluster.PortBinding {
 		},
 		dcluster.PortBinding{
 			Protocal:      "udp",
+			HostPort:      53,
+			ContainerPort: 53,
+		},
+		dcluster.PortBinding{
+			Protocal:      "tcp",
 			HostPort:      53,
 			ContainerPort: 53,
 		},
@@ -492,7 +526,9 @@ func (ctx *ClusterContext) createPlainDockerProxy(node string) (*dcontainer.Dock
 func (ctx *ClusterContext) runConsulAgent(dockerProxy *dcontainer.DockerProxy, agent dcluster.ConsulAgent, agentNode string, agentIp string) (string, error) {
 	name := fmt.Sprintf("%s-consul-agent", agentNode)
 	serverIp := ctx.clusterDesc.ConsulCluster.Server.IPs[0]
-	envs := []string{}
+	envs := []string{
+		"SERVICE_NAME=consul-agent",
+	}
 	cmds := []string{"-advertise", agentIp, "-join", serverIp}
 
 	portBindings := ctx.getConsulPortBindings()
@@ -564,7 +600,7 @@ func (ctx *ClusterContext) initSlave(node string, md dcluster.MachineDescription
 	return nil
 }
 
-func (ctx *ClusterContext) createSlaves(group string, md dcluster.MachineDescription, num int) ([]string, error) {
+func (ctx *ClusterContext) createSlaves(md dcluster.MachineDescription, num int) ([]string, error) {
 	successNodeNames := []string{}
 	errs := []string{}
 	var lock sync.Mutex
@@ -573,9 +609,9 @@ func (ctx *ClusterContext) createSlaves(group string, md dcluster.MachineDescrip
 	for i := 0; i < num; i++ {
 		go func(ctx *ClusterContext) {
 			defer wg.Done()
-			name, err := ctx.mProxy.CreateSlave(group, md)
+			name, err := ctx.mProxy.CreateSlave(md)
 			if err != nil {
-				fmt.Printf("Failed to Create machine of group '%s'. Error:%s\n", group, err.Error())
+				fmt.Printf("Failed to Create machine of group '%s'. Error:%s\n", md.Group, err.Error())
 				errs = append(errs, err.Error())
 			} else {
 				fmt.Printf("Machine(%s) created and started, begin to init slave.\n", name)
@@ -598,7 +634,8 @@ func (ctx *ClusterContext) createSlaves(group string, md dcluster.MachineDescrip
 	return successNodeNames[0:], err
 }
 
-func (ctx *ClusterContext) scaleMachineInByGroup(group string, md dcluster.MachineDescription) error {
+func (ctx *ClusterContext) scaleMachineInByGroup(md dcluster.MachineDescription) error {
+	group := md.Group
 	machines, err := ctx.mProxy.ListByGroup(group)
 	if err != nil {
 		fmt.Printf("Scale machine in failed when loading machine for group:%s\n", err.Error())
@@ -632,8 +669,8 @@ func (ctx *ClusterContext) scaleMachineInByGroup(group string, md dcluster.Machi
 			}
 			var description *dcluster.ContainerDescription = nil
 			group := c.Group
-			if cd, ok := ctx.clusterDesc.Container.Topology[group]; ok {
-				description = &cd
+			if cd, ok := ctx.clusterDesc.Container.Topology.GetDescription(group); ok {
+				description = cd
 			}
 			fmt.Printf("Stopping container. name:%s, cid:%s\n", c.Name[0], c.ID)
 			ctx.stopContainer(&c, description)
@@ -649,8 +686,8 @@ func (ctx *ClusterContext) scaleMachineIn() error {
 		fmt.Printf("No need to scale in.\n")
 		return nil
 	}
-	for group, md := range ctx.clusterDesc.Machine.Topology {
-		if err := ctx.scaleMachineInByGroup(group, md); err != nil {
+	for _, md := range ctx.clusterDesc.Machine.Topology {
+		if err := ctx.scaleMachineInByGroup(md); err != nil {
 			return err
 		}
 	}
@@ -689,23 +726,14 @@ func (ctx *ClusterContext) nextContainerName(group string) string {
 	return cn.GetName()
 }
 
-func (ctx *ClusterContext) getMachineGroup(cd *dcluster.ContainerDescription) string {
-	machine := cd.Machine
-	md, exists := ctx.clusterDesc.Machine.Topology[machine]
-	if !exists {
-		panic(fmt.Sprintf("Machine description missed: '%s'", machine))
-	}
-	group := md.Group
+func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, grp string) {
+	group := cd.Group
 	if group == "" {
-		group = machine
+		group = grp
 	}
-	return group
-}
-
-func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, group string) {
 	name := ctx.nextContainerName(group)
-	fmt.Printf("Run a new container. name:%s, image:%s, group:%s.\n", name, cd.Image, group)
-	envs := []string{"constraint:role==slave", "constraint:group==" + ctx.getMachineGroup(cd)}
+	log.Infof("Run a new container. name:%s, image:%s, group:%s.\n", name, cd.Image, group)
+	envs := []string{"constraint:role==slave", "constraint:group==" + cd.Machine}
 	envs = append(envs, cd.Env...)
 	if cd.URL != "" {
 		url := cd.URL
@@ -737,10 +765,10 @@ func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, group
 	}
 }
 
-func (ctx *ClusterContext) removeStoppedContainerByGroup(group string) {
+func (ctx *ClusterContext) removeStoppedContainerByGroup(group string) error {
 	if !ctx.rmc {
-		fmt.Printf("No need to remove stopped container of group '%s'\n", group)
-		return
+		log.Debugf("No need to remove stopped container of group '%s'", group)
+		return nil
 	}
 	containers := ctx.getContainerByGroup(group)
 	var wg sync.WaitGroup
@@ -761,6 +789,7 @@ func (ctx *ClusterContext) removeStoppedContainerByGroup(group string) {
 		}(c)
 	}
 	wg.Wait()
+	return nil
 }
 
 func (ctx *ClusterContext) stopContainer(c *dcontainer.ContainerInfo, description *dcluster.ContainerDescription) error {
@@ -803,7 +832,8 @@ func (ctx *ClusterContext) startContainer(container *dcontainer.ContainerInfo, d
 	return nil
 }
 
-func (ctx *ClusterContext) deployRunningContainersByDescription(group string, description *dcluster.ContainerDescription) error {
+func (ctx *ClusterContext) deployRunningContainersByDescription(description *dcluster.ContainerDescription) error {
+	group := description.Group
 	runningContainers := func() []dcontainer.ContainerInfo {
 		containers := ctx.getContainerByGroup(group)
 		running := []dcontainer.ContainerInfo{}
@@ -814,18 +844,19 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 		}
 		return running
 	}()
+	log.Debugf("The running num of group '%s' is %d", group, len(runningContainers))
 	var lock sync.Mutex
 	total := len(runningContainers)
 	if total <= 0 {
-		fmt.Println(fmt.Sprintf("No running container for group %s is available. ", group))
+		log.Debugf("No running container for group %s is available. ", group)
 		return nil
 	}
 	sim := int(float64(total) * float64(ctx.cStepPercent) / float64(100))
 	if sim <= 0 {
-		fmt.Printf("The simutaneous container is less than 0(%d). 1 will be set.\n", sim)
+		log.Debugf("The simutaneous container is less than 0(%d). 1 will be set.", sim)
 		sim = 1
 	}
-	fmt.Printf("Simutaneous of group '%s' is %d, total: %d\n", group, sim, total)
+	log.Debugf("Simutaneous of group '%s' is %d, total: %d", group, sim, total)
 	blocking := make(chan int, sim)
 	done := make(chan bool, 1)
 	doneNum := 0
@@ -841,6 +872,7 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 
 	for idx, c := range runningContainers {
 		if c.Image == description.Image && !description.Restart {
+			log.Debugf("The image of container group '%s' is not changed, and need not to be restart. so nothing to be done with the container. name:%s, id:%s", c.Group, c.Name[0], c.ID)
 			increaseDoneNum()
 			continue
 		}
@@ -854,7 +886,7 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 			if c.Image == description.Image {
 				err := ctx.startContainer(&c, description) // just restart
 				if err != nil && err != io.EOF {
-					fmt.Printf("Fail to start an existing container, error: %s, run a brand new container instead.. ", err.Error())
+					log.Debugf("Fail to start an existing container, error: %s, run a brand new container instead.. ", err.Error())
 					ctx.runContainer(description, group)
 				}
 			} else {
@@ -864,10 +896,12 @@ func (ctx *ClusterContext) deployRunningContainersByDescription(group string, de
 		}(c, ctx)
 	}
 	<-done
+	log.Debugf("Running container of group '%s' deployed successfully.", group)
 	return nil
 }
 
-func (ctx *ClusterContext) scaleOutContainersByDescription(group string, description *dcluster.ContainerDescription) error {
+func (ctx *ClusterContext) scaleOutContainersByDescription(description *dcluster.ContainerDescription) error {
+	group := description.Group
 	if !ctx.cScaleOut {
 		fmt.Printf("scale out container flag is set to false(not set), no need to scale container out for group '%s'.\n", group)
 		return nil
@@ -881,10 +915,10 @@ func (ctx *ClusterContext) scaleOutContainersByDescription(group string, descrip
 	}
 	createNum := description.Num - running
 	if createNum <= 0 {
-		fmt.Printf("No need to scale out container for group '%s'. running:%d, need:%d\n", group, running, description.Num)
+		log.Debugf("No need to scale out container for group '%s'. running:%d, need:%d\n", group, running, description.Num)
 		return nil
 	}
-	fmt.Printf("%d container will be created and run of group '%s'.\n", createNum, group)
+	log.Debugf("%d container will be created and run of group '%s'.\n", createNum, group)
 
 	var wg sync.WaitGroup
 	for i := 0; i < createNum; i++ {
@@ -898,9 +932,10 @@ func (ctx *ClusterContext) scaleOutContainersByDescription(group string, descrip
 	return nil
 }
 
-func (ctx *ClusterContext) scaleInContainersByDescription(group string, description *dcluster.ContainerDescription) error {
+func (ctx *ClusterContext) scaleInContainersByDescription(description *dcluster.ContainerDescription) error {
+	group := description.Group
 	if !ctx.cScaleIn {
-		fmt.Printf("scale in flag is set to false(not set), not need to scale container out for group '%s'.\n", group)
+		log.Infof("scale in flag is set to false(not set), not need to scale container out for group '%s'.\n", group)
 		return nil
 	}
 	containers := ctx.getContainerByGroup(group)
@@ -915,7 +950,7 @@ func (ctx *ClusterContext) scaleInContainersByDescription(group string, descript
 		fmt.Printf("No need to scale in container for group '%s'. running:%d, need:%d\n", group, running, description.Num)
 		return nil
 	}
-	fmt.Printf("%d container will be stopped of group '%s'.\n", needStopped, group)
+	log.Infof("%d container will be stopped of group '%s'.\n", needStopped, group)
 
 	var wg sync.WaitGroup
 	stopped := 0
@@ -937,16 +972,120 @@ func (ctx *ClusterContext) scaleInContainersByDescription(group string, descript
 	return nil
 }
 
-func (ctx *ClusterContext) deployContainersByDescription(group string, description *dcluster.ContainerDescription) error {
-	ctx.deployRunningContainersByDescription(group, description)
+func (ctx *ClusterContext) deployContainersByDescription(description *dcluster.ContainerDescription) error {
+	log.Debugf("deploy container by description:%+v", description)
+	log.Debugf("deploy runnning container of group '%s'", description.Group)
+	if err := ctx.deployRunningContainersByDescription(description); err != nil {
+		return err
+	}
+	log.Debugf("scale out container of group '%s'", description.Group)
+	if err := ctx.scaleOutContainersByDescription(description); err != nil {
+		return err
+	}
+	log.Debugf("scale in container of group '%s'", description.Group)
+	if err := ctx.scaleInContainersByDescription(description); err != nil {
+		return err
+	}
+	log.Debugf("remove stopped container of group '%s'", description.Group)
+	return ctx.removeStoppedContainerByGroup(description.Group)
+}
 
-	ctx.scaleOutContainersByDescription(group, description)
-
-	ctx.scaleInContainersByDescription(group, description)
-
-	ctx.removeStoppedContainerByGroup(group)
-
+func (ctx *ClusterContext) addContainerDescription(gdeps *dcontainer.ContainerGroupDeps, description *dcluster.ContainerDescription) error {
+	gdeps.AddDeps(description.Group, description.Deps)
+	for _, dep := range description.Deps {
+		dd, exists := ctx.clusterDesc.Container.Topology.GetDescription(dep)
+		if !exists {
+			return fmt.Errorf("No container dependancy description found. group:%s, deps:%s", description.Group, dep)
+		}
+		if err := ctx.addContainerDescription(gdeps, dd); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// init the container description type
+// init the container description dependancy level
+func (ctx *ClusterContext) initContainerDescription() error {
+	// handle service discovery related container description
+	log.Debugf("Initing service discovery container description.")
+	sdDeps := dcontainer.NewContainerGroupDeps()
+	for name, sdd := range ctx.clusterDesc.ServiceDiscover {
+		cgroup, _ := sdd["container"]
+		description, exists := ctx.clusterDesc.Container.Topology.GetDescription(cgroup)
+		if !exists {
+			return fmt.Errorf("No container description found for service discovery. sd:%s", name)
+		}
+		if err := ctx.addContainerDescription(sdDeps, description); err != nil {
+			return err
+		}
+	}
+	sdVisit := func(lvl int, groups []string) error {
+		for _, g := range groups {
+			cd, exists := ctx.clusterDesc.Container.Topology.GetDescription(g)
+			if !exists {
+				return fmt.Errorf("No service discover container description found for group '%s'", g)
+			}
+			cd.Type = dcluster.ContainerDescription_TYPE_SD
+			cd.DepLevel = lvl
+			log.Debugf("init service discovery container description. group:%s. level:%d", g, lvl)
+		}
+		return nil
+	}
+	if err := sdDeps.VisitByLevel(sdVisit, false); err != nil {
+		return err
+	}
+	log.Debugf("Service discovery container description inited.")
+
+	bizDeps := dcontainer.NewContainerGroupDeps()
+	log.Debugf("Initing biz container description.")
+	for _, cd := range ctx.clusterDesc.Container.Topology {
+		if err := ctx.addContainerDescription(bizDeps, &cd); err != nil {
+			return err
+		}
+	}
+	bizVisit := func(lvl int, groups []string) error {
+		for _, g := range groups {
+			cd, exists := ctx.clusterDesc.Container.Topology.GetDescription(g)
+			if !exists {
+				return fmt.Errorf("No biz container description found for group '%s'", g)
+			}
+			switch cd.Type {
+			case dcluster.ContainerDescription_TYPE_SD:
+				// do nothing
+			default:
+				cd.Type = dcluster.ContainerDescription_TYPE_BZ
+				cd.DepLevel = lvl
+				dlog.Debugf("init biz container description. group:%s. level:%d\n", g, lvl)
+			}
+		}
+		return nil
+	}
+	if err := bizDeps.VisitByLevel(bizVisit, false); err != nil {
+		return err
+	}
+	log.Debugf("biz container description inited. %+v", ctx.clusterDesc.Container.Topology)
+	return nil
+}
+
+func (ctx *ClusterContext) getSortedDescriptionByType(t int) []dcluster.ContainerDescription {
+	cds := []dcluster.ContainerDescription{}
+	for _, description := range ctx.clusterDesc.Container.Topology {
+		if description.Type == t {
+			cds = append(cds, description)
+		}
+	}
+	sort.Sort(dcluster.SortContainerDescriptionDescByLevel(cds))
+	log.Debugf("the container description for type '%d' is %+v", t, cds)
+	return cds
+}
+
+func (ctx *ClusterContext) getSortedSDDescriptionByType() []dcluster.ContainerDescription {
+	return ctx.getSortedDescriptionByType(dcluster.ContainerDescription_TYPE_SD)
+}
+
+func (ctx *ClusterContext) getSortedBizDescriptionByType() []dcluster.ContainerDescription {
+	return ctx.getSortedDescriptionByType(dcluster.ContainerDescription_TYPE_BZ)
 }
 
 func (ctx *ClusterContext) splitDescription() (map[string]dcluster.ContainerDescription, []string, []string) {
@@ -966,7 +1105,8 @@ func (ctx *ClusterContext) splitDescription() (map[string]dcluster.ContainerDesc
 
 	fmt.Printf("Service discover container group:%+v\n", sdGroups)
 
-	for group, description := range ctx.clusterDesc.Container.Topology {
+	for _, description := range ctx.clusterDesc.Container.Topology {
+		group := description.Group
 		descriptions[group] = description
 		fmt.Printf("Description: group:%s, description:%+v, total:%+v\n", group, description, descriptions)
 		// add deps
@@ -998,36 +1138,27 @@ func (ctx *ClusterContext) splitDescription() (map[string]dcluster.ContainerDesc
 }
 
 func (ctx *ClusterContext) deployContainers() error {
-	deploy := func(ctx *ClusterContext, descriptions map[string]dcluster.ContainerDescription, groups []string) error {
-		for _, group := range groups {
-			description, ok := descriptions[group]
-			if !ok {
-				panic(fmt.Sprintf("No description found for group:%s", group))
-			}
-			fmt.Printf("Deploy container for group:%s/%s. description:%+v\n", group, description.Group, description)
-			if err := ctx.deployContainersByDescription(group, &description); err != nil {
-				panic(fmt.Sprintf("Failed to deploy container for group:%s/%s. err:%s\n", group, description.Group, err.Error()))
-			}
+	descriptions := ctx.getSortedBizDescriptionByType()
+	log.Infof("The num of biz container description is %d", len(descriptions))
+
+	for _, description := range descriptions {
+		log.Infof("Deploy container for group '%s'", description.Group)
+		if err := ctx.deployContainersByDescription(&description); err != nil {
+			panic(fmt.Sprintf("Failed to deploy container for group:%s. err:%s", description.Group, err.Error()))
 		}
-		return nil
+
 	}
 
-	descriptions, sdGroups, bizGroups := ctx.splitDescription()
-
-	fmt.Printf("Deploy service discover group container:%+v\n", sdGroups)
-	deploy(ctx, descriptions, sdGroups)
-
+	log.Infof("Reload the containers after all biz container deployed")
 	if err := ctx.loadContainers(); err != nil {
 		return errors.New("Failed to load containers:" + err.Error())
 	}
-
-	fmt.Printf("Deploy biz group container:%+v\n", bizGroups)
-	deploy(ctx, descriptions, bizGroups)
+	log.Info("biz contontainer deployed successfully")
 	return nil
 }
 
 // return: running, restart, error
-func (ctx *ClusterContext) startMachines(group string, machines []dmachine.MachineInfo, md dcluster.MachineDescription) (int, int, error) {
+func (ctx *ClusterContext) startMachines(machines []dmachine.MachineInfo, md dcluster.MachineDescription) (int, int, error) {
 	running := 0
 	stoppedNodes := func(ms []dmachine.MachineInfo) []string {
 		stopped := []string{}
@@ -1045,7 +1176,7 @@ func (ctx *ClusterContext) startMachines(group string, machines []dmachine.Machi
 
 	max := md.MinNum
 	if running >= max {
-		fmt.Printf("Enough node running, no need to start extra machines. group:%s, running:%d, max:%d\n", group, running, max)
+		fmt.Printf("Enough node running, no need to start extra machines. group:%s, running:%d, max:%d\n", md.Group, running, max)
 		return running, 0, nil
 	}
 
@@ -1086,24 +1217,20 @@ func (ctx *ClusterContext) startMachines(group string, machines []dmachine.Machi
 	return running, running - orgRunNum, err
 }
 
-func (ctx *ClusterContext) scaleMachineOutByGroup(grp string, md dcluster.MachineDescription) error {
-	group := md.Group
-	if group == "" {
-		group = grp
-	}
+func (ctx *ClusterContext) scaleMachineOutByGroup(md dcluster.MachineDescription) error {
 	min := md.MinNum
-	machines, err := ctx.mProxy.ListByGroup(group)
+	machines, err := ctx.mProxy.ListByGroup(md.Group)
 	if err != nil {
 		fmt.Printf("Failed to load machine for group:%s\n", err.Error())
 		return err
 	}
 
-	fmt.Printf("Start stopped machines for group:%s\n", group)
-	runningNum, restarted, err := ctx.startMachines(group, machines, md)
+	fmt.Printf("Start stopped machines for group:%s\n", md.Group)
+	runningNum, restarted, err := ctx.startMachines(machines, md)
 	if err != nil {
-		fmt.Printf("Error happend when Start machines for group:%s. total running:%d, need: %d, err:%s\n", group, runningNum, min, err.Error())
+		fmt.Printf("Error happend when Start machines for group:%s. total running:%d, need: %d, err:%s\n", md.Group, runningNum, min, err.Error())
 	} else {
-		fmt.Printf("Start machines complete for group:%s. running:%d, need: %d\n", group, runningNum, min)
+		fmt.Printf("Start machines complete for group:%s. running:%d, need: %d\n", md.Group, runningNum, min)
 	}
 
 	if runningNum >= min {
@@ -1113,15 +1240,15 @@ func (ctx *ClusterContext) scaleMachineOutByGroup(grp string, md dcluster.Machin
 	fmt.Printf("Running machines num is 'not' enough(%d) for the cluster minimal need(%d)\n", runningNum, min)
 
 	toBeCreateNum := min - runningNum
-	fmt.Printf("Creating %d machines of group '%s'\n", toBeCreateNum, group)
-	startedNames, err := ctx.createSlaves(group, md, toBeCreateNum)
+	fmt.Printf("Creating %d machines of group '%s'\n", toBeCreateNum, md.Group)
+	startedNames, err := ctx.createSlaves(md, toBeCreateNum)
 	createdNum := len(startedNames)
 	runningNum += createdNum
 	if err != nil {
-		fmt.Printf("Error happened when create machines of group '%s'. err:%s\n", group, err.Error())
+		fmt.Printf("Error happened when create machines of group '%s'. err:%s\n", md.Group, err.Error())
 	}
 
-	fmt.Printf("%d machines running, of which %d restarted and %d created.group: %s.\n", runningNum, restarted, createdNum, group)
+	fmt.Printf("%d machines running, of which %d restarted and %d created.group: %s.\n", runningNum, restarted, createdNum, md.Group)
 
 	if runningNum < min {
 		errInfo := fmt.Sprintf("Machine num if not enough. Rumming is %d, but the minimal requirements is %d.\n", runningNum, min)
@@ -1134,14 +1261,26 @@ func (ctx *ClusterContext) scaleMachineOutByGroup(grp string, md dcluster.Machin
 
 func (ctx *ClusterContext) scaleMachineOut() error {
 	if !ctx.mScaleOut {
-		fmt.Printf("No need to scale machine out.\n")
+		log.Infof("No need to scale machine out.\n")
 		return nil
 	}
-	for group, md := range ctx.clusterDesc.Machine.Topology {
-		if err := ctx.scaleMachineOutByGroup(group, md); err != nil {
-			return err
-		}
+	var wg sync.WaitGroup
+	errs := []string{}
+	for _, md := range ctx.clusterDesc.Machine.Topology {
+		wg.Add(1)
+		go func(md dcluster.MachineDescription) {
+			defer wg.Done()
+			if err := ctx.scaleMachineOutByGroup(md); err != nil {
+				errs = append(errs, err.Error())
+			}
+			fmt.Printf("Scale machine out for group '%s' complete \n", md.Group)
+		}(md)
 	}
+	wg.Wait()
+	if len(errs) > 0 {
+		return fmt.Errorf("Scale machine out error:%+v", errs)
+	}
+	fmt.Printf("Scale machine out complete.\n")
 	return nil
 }
 
@@ -1167,11 +1306,15 @@ func (ctx *ClusterContext) startMaster() error {
 	if !exists {
 		if ctx.create {
 			fmt.Printf("Master is not exists on the cluster, creating an new master.\n")
-			mmd, exists := ctx.clusterDesc.Machine.Topology["master"]
+			group := ctx.clusterDesc.MasterGroup
+			if group == "" {
+				group, _ = dmachine.ParseMachineName(ctx.clusterDesc.Master)
+			}
+			mmd, exists := ctx.clusterDesc.Machine.Topology.GetDescription(group)
 			if !exists {
 				return fmt.Errorf("master description missed in machine topology.")
 			}
-			if err := ctx.mProxy.CreateMaster(mmd); err != nil {
+			if err := ctx.mProxy.CreateMaster(*mmd); err != nil {
 				return err
 			}
 			ctx.reloadMachineInfos()
@@ -1194,7 +1337,7 @@ func (ctx *ClusterContext) startMaster() error {
 
 func (ctx *ClusterContext) createConsulClusterServers(nodes []string) error {
 	server := ctx.clusterDesc.ConsulCluster.Server
-	smd, ok := ctx.clusterDesc.Machine.Topology[server.Machine]
+	smd, ok := ctx.clusterDesc.Machine.Topology.GetDescription(server.Machine)
 	if !ok {
 		return errors.New(fmt.Sprintf("Consul server machine description missed. machine group: '%s'", server.Machine))
 	}
@@ -1216,7 +1359,7 @@ func (ctx *ClusterContext) createConsulClusterServers(nodes []string) error {
 				"--engine-label",
 				"group=consulcluster",
 			}
-			if err := ctx.mProxy.CreateMachine(n, smd, opts); err != nil {
+			if err := ctx.mProxy.CreateMachine(n, *smd, opts); err != nil {
 				fmt.Printf("Failed to create consul server. node:%s, err:%s\n", n, err.Error())
 				errs = errs + "--" + err.Error()
 			} else {
@@ -1267,13 +1410,18 @@ func (ctx *ClusterContext) startConsulCluster() error {
 			if !m.IsRunning() {
 				stoppedNodes = append(stoppedNodes, m.Name)
 			}
-			consulServerIPs = append(consulServerIPs, m.IP)
 		}
-		fmt.Printf("Consul server(num:%d) is exists, %d are stopped and will be restarted. ips:%+v\n", len(serverMachineInfos), len(stoppedNodes), consulServerIPs)
-		_, err := ctx.mProxy.Start(stoppedNodes...)
-		if err != nil {
+		fmt.Printf("Consul server(num:%d) is exists, %d are stopped and will be restarted. \n", len(serverMachineInfos), len(stoppedNodes))
+		if len(stoppedNodes) > 0 {
+			_, err := ctx.mProxy.Start(stoppedNodes...)
+			if err != nil {
+				return err
+			}
+		}
+		if consulServerIPs, err = ctx.mProxy.IPs(server.Nodes); err != nil {
 			return err
 		}
+
 	} else {
 		if err := ctx.createConsulClusterServers(nodes); err != nil {
 			return err

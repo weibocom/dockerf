@@ -120,9 +120,9 @@ func (mp *MachineClusterProxy) generateName(group string) string {
 	return FormateMachineName(group, seq.Next())
 }
 
-func (mp *MachineClusterProxy) CreateSlave(group string, md dcluster.MachineDescription) (string, error) {
+func (mp *MachineClusterProxy) CreateSlave(md dcluster.MachineDescription) (string, error) {
 	nodeName := mp.generateName(md.Group)
-	opts := []string{"--engine-label", "group=" + group}
+	opts := []string{"--engine-label", "group=" + md.Group}
 	opts = append(opts, mp.getSlaveOptions(md)...)
 	extOpts, err := mp.GetOptionByDescription(md)
 	if err != nil {

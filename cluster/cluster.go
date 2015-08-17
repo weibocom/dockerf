@@ -59,10 +59,21 @@ func (md *MachineDescription) GetDiskCapacityInBytes() int {
 
 type CloudDrivers map[string]CloudDriverDescription
 
+type MachineTopology []MachineDescription
+
+func (ct *MachineTopology) GetDescription(group string) (*MachineDescription, bool) {
+	for idx, description := range *ct {
+		if description.Group == group {
+			return &(*ct)[idx], true
+		}
+	}
+	return nil, false
+}
+
 type MachineCluster struct {
 	OS       string
 	Cloud    CloudDrivers
-	Topology map[string]MachineDescription
+	Topology MachineTopology
 }
 
 func (cds *CloudDrivers) SurportedDrivers() []string {
@@ -73,12 +84,27 @@ func (cds *CloudDrivers) SurportedDrivers() []string {
 	return names
 }
 
-type ContainerCluster struct {
-	Topology map[string]ContainerDescription
+type ContainerTopology []ContainerDescription
+
+func (ct *ContainerTopology) GetDescription(group string) (*ContainerDescription, bool) {
+	for idx, description := range *ct {
+		if description.Group == group {
+			return &(*ct)[idx], true
+		}
+	}
+	return nil, false
 }
 
+type ContainerCluster struct {
+	Topology ContainerTopology
+}
+
+const (
+	ContainerDescription_TYPE_SD = 1
+	ContainerDescription_TYPE_BZ = 2
+)
+
 type ContainerDescription struct {
-	Name            string
 	Num             int
 	Image           string
 	PreStop         string
@@ -93,6 +119,20 @@ type ContainerDescription struct {
 	Volums          []string
 	Group           string
 	Env             []string
+	DepLevel        int
+	Type            int
+}
+
+type SortContainerDescriptionDescByLevel []ContainerDescription
+
+func (s SortContainerDescriptionDescByLevel) Len() int {
+	return len(s)
+}
+func (s SortContainerDescriptionDescByLevel) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s SortContainerDescriptionDescByLevel) Less(i, j int) bool {
+	return s[i].DepLevel > s[j].DepLevel
 }
 
 type CloudDriverDescription struct {
@@ -142,9 +182,10 @@ type ConsulDescription struct {
 type ServiceDiscoverDiscription map[string]string
 
 type Cluster struct {
-	ClusterBy string // such as swarm
-	Master    string
-	Discovery string
+	ClusterBy   string // such as swarm
+	Master      string
+	MasterGroup string
+	Discovery   string
 
 	Machine   MachineCluster
 	Container ContainerCluster
