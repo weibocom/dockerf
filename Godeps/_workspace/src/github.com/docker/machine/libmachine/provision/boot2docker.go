@@ -100,7 +100,7 @@ func (provisioner *Boot2DockerProvisioner) Hostname() (string, error) {
 
 func (provisioner *Boot2DockerProvisioner) SetHostname(hostname string) error {
 	if _, err := provisioner.SSHCommand(fmt.Sprintf(
-		"sudo hostname %s && echo %q | sudo tee /var/lib/boot2docker/etc/hostname",
+		"sudo /usr/bin/sethostname %s && echo %q | sudo tee /var/lib/boot2docker/etc/hostname",
 		hostname,
 		hostname,
 	)); err != nil {
@@ -140,6 +140,9 @@ DOCKER_STORAGE={{.EngineOptions.StorageDriver}}
 DOCKER_TLS=auto
 SERVERKEY={{.AuthOptions.ServerKeyRemotePath}}
 SERVERCERT={{.AuthOptions.ServerCertRemotePath}}
+
+{{range .EngineOptions.Env}}export \"{{ printf "%q" . }}\"
+{{end}}
 `
 	t, err := template.New("engineConfig").Parse(engineConfigTmpl)
 	if err != nil {
@@ -167,6 +170,10 @@ func (provisioner *Boot2DockerProvisioner) CompatibleWithHost() bool {
 
 func (provisioner *Boot2DockerProvisioner) SetOsReleaseInfo(info *OsRelease) {
 	provisioner.OsReleaseInfo = info
+}
+
+func (provisioner *Boot2DockerProvisioner) GetOsReleaseInfo() (*OsRelease, error) {
+	return provisioner.OsReleaseInfo, nil
 }
 
 func (provisioner *Boot2DockerProvisioner) Provision(swarmOptions swarm.SwarmOptions, authOptions auth.AuthOptions, engineOptions engine.EngineOptions) error {

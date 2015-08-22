@@ -45,6 +45,9 @@ Options:
 `
 
 func NewMachineApp(appName string) *cli.App {
+	cli.AppHelpTemplate = AppHelpTemplate
+	cli.CommandHelpTemplate = CommandHelpTemplate
+
 	app := cli.NewApp()
 	name := appName
 	if name == "" {
@@ -63,12 +66,12 @@ func NewMachineApp(appName string) *cli.App {
 	app.Commands = commands.Commands
 	app.CommandNotFound = cmdNotFound
 	app.Usage = "Create and manage machines running Docker."
-	app.Version = version.VERSION + " (" + version.GITCOMMIT + ")"
+	app.Version = version.Version + " (" + version.GitCommit + ")"
 
 	app.Commands = commands.Commands
 	app.CommandNotFound = cmdNotFound
 	app.Usage = "Create and manage machines running Docker."
-	app.Version = version.VERSION + " (" + version.GITCOMMIT + ")"
+	app.Version = version.Version + " (" + version.GitCommit + ")"
 
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{

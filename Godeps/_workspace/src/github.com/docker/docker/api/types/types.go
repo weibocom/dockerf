@@ -1,6 +1,7 @@
 package types
 
 import (
+	"os"
 	"time"
 
 	"github.com/docker/docker/daemon/network"
@@ -75,12 +76,17 @@ type Image struct {
 	Labels      map[string]string
 }
 
+type GraphDriverData struct {
+	Name string
+	Data map[string]string
+}
+
 // GET "/images/{name:.*}/json"
 type ImageInspect struct {
 	Id              string
 	Parent          string
 	Comment         string
-	Created         time.Time
+	Created         string
 	Container       string
 	ContainerConfig *runconfig.Config
 	DockerVersion   string
@@ -90,6 +96,7 @@ type ImageInspect struct {
 	Os              string
 	Size            int64
 	VirtualSize     int64
+	GraphDriver     GraphDriverData
 }
 
 // GET  "/containers/json"
@@ -111,11 +118,25 @@ type Container struct {
 	SizeRootFs int `json:",omitempty"`
 	Labels     map[string]string
 	Status     string
+	HostConfig struct {
+		NetworkMode string `json:",omitempty"`
+	}
 }
 
 // POST "/containers/"+containerID+"/copy"
 type CopyConfig struct {
 	Resource string
+}
+
+// ContainerPathStat is used to encode the header from
+// 	GET /containers/{name:.*}/archive
+// "name" is basename of the resource.
+type ContainerPathStat struct {
+	Name       string      `json:"name"`
+	Size       int64       `json:"size"`
+	Mode       os.FileMode `json:"mode"`
+	Mtime      time.Time   `json:"mtime"`
+	LinkTarget string      `json:"linkTarget"`
 }
 
 // GET "/containers/{name:.*}/top"
@@ -133,6 +154,7 @@ type Version struct {
 	Arch          string
 	KernelVersion string `json:",omitempty"`
 	Experimental  bool   `json:",omitempty"`
+	BuildTime     string `json:",omitempty"`
 }
 
 // GET "/info"
@@ -147,6 +169,8 @@ type Info struct {
 	CpuCfsPeriod       bool
 	CpuCfsQuota        bool
 	IPv4Forwarding     bool
+	BridgeNfIptables   bool
+	BridgeNfIp6tables  bool
 	Debug              bool
 	NFd                int
 	OomKillDisable     bool
@@ -190,14 +214,14 @@ type ContainerState struct {
 	Pid        int
 	ExitCode   int
 	Error      string
-	StartedAt  time.Time
-	FinishedAt time.Time
+	StartedAt  string
+	FinishedAt string
 }
 
 // GET "/containers/{name:.*}/json"
 type ContainerJSONBase struct {
 	Id              string
-	Created         time.Time
+	Created         string
 	Path            string
 	Args            []string
 	State           *ContainerState
@@ -213,22 +237,24 @@ type ContainerJSONBase struct {
 	ExecDriver      string
 	MountLabel      string
 	ProcessLabel    string
-	Volumes         map[string]string
-	VolumesRW       map[string]bool
 	AppArmorProfile string
 	ExecIDs         []string
 	HostConfig      *runconfig.HostConfig
+	GraphDriver     GraphDriverData
 }
 
 type ContainerJSON struct {
 	*ContainerJSONBase
+	Mounts []MountPoint
 	Config *runconfig.Config
 }
 
 // backcompatibility struct along with ContainerConfig
-type ContainerJSONRaw struct {
+type ContainerJSONPre120 struct {
 	*ContainerJSONBase
-	Config *ContainerConfig
+	Volumes   map[string]string
+	VolumesRW map[string]bool
+	Config    *ContainerConfig
 }
 
 type ContainerConfig struct {
@@ -239,4 +265,14 @@ type ContainerConfig struct {
 	MemorySwap int64
 	CpuShares  int64
 	Cpuset     string
+}
+
+// MountPoint represents a mount point configuration inside the container.
+type MountPoint struct {
+	Name        string `json:",omitempty"`
+	Source      string
+	Destination string
+	Driver      string `json:",omitempty"`
+	Mode        string // this is internally named `Relabel`
+	RW          bool
 }
