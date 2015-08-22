@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	dutils "github.com/weibocom/dockerf/dlog"
 )
@@ -135,11 +136,12 @@ func (mp *MachineProxy) Config(node string, cluster string) (string, error) {
 
 	data, err := exec.Command(cmd, args...).Output()
 	if err != nil {
-		dutils.Errorf("Fail to get machine config, name: %s, error: %s", node, err.Error())
-		return "", err
+		log.Errorf("Fail to get machine config, name: %s, error: %s", node, err.Error())
 	}
+	log.Debugf("load tls config. data:\n", string(data))
 	sr := strings.NewReader(string(data))
 	br := bufio.NewReader(sr)
+
 	for {
 		if bline, _, err := br.ReadLine(); err == nil {
 			line := string(bline)
