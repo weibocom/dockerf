@@ -10,6 +10,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/weibocom/dockerf/api/client"
+	_ "github.com/weibocom/dockerf/container/filter"
 	flag "github.com/weibocom/dockerf/dflag"
 	_ "github.com/weibocom/dockerf/discovery/drivers"
 )
