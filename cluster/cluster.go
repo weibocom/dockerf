@@ -2,7 +2,9 @@ package cluster
 
 import (
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
+	"strconv"
 	"strings"
 
 	dutils "github.com/weibocom/dockerf/utils"
@@ -102,6 +104,7 @@ type ContainerCluster struct {
 const (
 	ContainerDescription_TYPE_SD = 1
 	ContainerDescription_TYPE_BZ = 2
+	MultiPort_Separator          = "|"
 )
 
 type ContainerDescription struct {
@@ -118,6 +121,7 @@ type ContainerDescription struct {
 	PortBinding     PortBinding
 	Volums          []string
 	Group           string
+	Env             []string
 	DepLevel        int
 	Type            int
 }
@@ -204,5 +208,83 @@ func NewCluster(configFilePos string) (*Cluster, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	replaceClusterConfigInfo(c)
+
 	return c, nil
+}
+
+func parsePortBindings(cluster *Cluster) error {
+	for group, description := range cluster.Container.Topology {
+		binding := PortBinding{}
+		if err := binding.Parse(description.Port); err != nil {
+			return err
+		}
+		description.PortBinding = binding
+		cluster.Container.Topology[group] = description
+		log.Debugf("Port binding parsed. group: %s, binding:%+v\n", description.Group, binding)
+	}
+	return nil
+}
+
+func parseMultiPort(cd ContainerDescription) []ContainerDescription {
+	port := cd.Port
+	hostport := ContainerPort(port).GetHostPort()
+	if strings.Contains(hostport, MultiPort_Separator) {
+		cds := []ContainerDescription{}
+		protocol := ContainerPort(port).GetContainerProtocol()
+		containerPort := ContainerPort(port).GetContainerPort()
+		ports := strings.Split(hostport, MultiPort_Separator)
+		for _, p := range ports {
+			newHostPort := ContainerPort(port).buildContainerPort(protocol, containerPort, p)
+			newContainerDescription := ContainerDescription{
+				Num:             cd.Num,
+				Image:           cd.Image,
+				PreStop:         cd.PreStop,
+				PostStart:       cd.PostStart,
+				URL:             cd.URL,
+				Port:            newHostPort,
+				Deps:            cd.Deps,
+				ServiceDiscover: cd.ServiceDiscover,
+				Restart:         cd.Restart,
+				Machine:         cd.Machine,
+				Volums:          cd.Volums,
+				Group:           cd.Group,
+				Env:             cd.Env,
+				DepLevel:        cd.DepLevel,
+				Type:            cd.Type,
+			}
+			cds = append(cds, newContainerDescription)
+		}
+		return cds
+	}
+	return []ContainerDescription{cd}
+}
+
+func replaceClusterConfigInfo(cluster *Cluster) {
+	replaceContainerConfigInfo(cluster)
+}
+
+func replaceContainerConfigInfo(cluster *Cluster) {
+	replacedContainerInfo := ContainerCluster{}
+	replacedTopology := ContainerTopology{}
+	for _, containerInfo := range cluster.Container.Topology {
+		replacedTopology = append(replacedTopology, parseMultiPort(containerInfo)...)
+	}
+	replacedContainerInfo.Topology = replacedTopology
+	cluster.Container = replacedContainerInfo
+
+	if err := parsePortBindings(cluster); err != nil {
+		panic("Fail to parse port binding info, please check config file... ")
+	}
+
+	for index, containerInfo := range cluster.Container.Topology {
+		cluster.Container.Topology[index] = replaceContainerPlaceholder(containerInfo)
+	}
+}
+
+func replaceContainerPlaceholder(cd ContainerDescription) ContainerDescription {
+	cd.URL = strings.Replace(cd.URL, "{port}", strconv.Itoa(cd.PortBinding.GetHostPort()), -1)
+	cd.Group = strings.Replace(cd.Group, "{port}", strconv.Itoa(cd.PortBinding.GetHostPort()), -1)
+	return cd
 }

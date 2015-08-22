@@ -84,8 +84,8 @@ func NewClusterContext(mScaleIn, mScaleOut, cScaleIn, cScaleout, rmc bool, cFilt
 
 // init the exists machine, container, and seq
 func (ctx *ClusterContext) initContext() {
-	log.Info("Parsing port binding in cluster description.")
-	ctx.parsePortBindings()
+	// log.Info("Parsing port binding in cluster description.")
+	// ctx.parsePortBindings()
 
 	log.Info("Init container description")
 	ctx.initContainerDescription()
@@ -151,18 +151,18 @@ func (ctx *ClusterContext) initContext() {
 	log.Info("cluster context inited successfully")
 }
 
-func (ctx *ClusterContext) parsePortBindings() error {
-	for group, description := range ctx.clusterDesc.Container.Topology {
-		binding := dcluster.PortBinding{}
-		if err := binding.Parse(description.Port); err != nil {
-			return err
-		}
-		description.PortBinding = binding
-		ctx.clusterDesc.Container.Topology[group] = description
-		log.Debugf("Port binding parsed. group: %s, binding:%+v\n", description.Group, binding)
-	}
-	return nil
-}
+// func (ctx *ClusterContext) parsePortBindings() error {
+// 	for group, description := range ctx.clusterDesc.Container.Topology {
+// 		binding := dcluster.PortBinding{}
+// 		if err := binding.Parse(description.Port); err != nil {
+// 			return err
+// 		}
+// 		description.PortBinding = binding
+// 		ctx.clusterDesc.Container.Topology[group] = description
+// 		log.Debugf("Port binding parsed. group: %s, binding:%+v\n", description.Group, binding)
+// 	}
+// 	return nil
+// }
 
 func (ctx *ClusterContext) loadContainers() error {
 	var (
@@ -734,6 +734,7 @@ func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, grp s
 	name := ctx.nextContainerName(group)
 	log.Infof("Run a new container. name:%s, image:%s, group:%s.\n", name, cd.Image, group)
 	envs := []string{"constraint:role==slave", "constraint:group==" + cd.Machine}
+	envs = append(envs, cd.Env...)
 	if cd.URL != "" {
 		url := cd.URL
 		idx := strings.IndexAny(url, ".")
