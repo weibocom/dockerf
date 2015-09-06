@@ -7,7 +7,7 @@ machine:
 
     cloud:
        aliyun:
-          options: --engine-install-url https://get.daocloud.io/docker/ --engine-insecure-registry 123.57.88.212:5000 --swarm-image 123.57.88.212:5000/library/swarm
+          options: --aliyun-security-group-id usertag --engine-install-url https://get.daocloud.io/docker/ --engine-insecure-registry 123.57.88.212:5000 --swarm-image 123.57.88.212:5000/tangyang/swarm
           globaloptions: --native-ssh
           default: true
        virtualbox:
@@ -37,7 +37,7 @@ machine:
           disk:
              type: ssd
              capacity: 20g
-          region: cn-qingdao
+          region: cn-beijing
           init: touch ~/hello
           driveropts:
           consul: false
@@ -50,7 +50,7 @@ machine:
           disk:
              type: ssd
              capacity: 10240m
-          region: cn-qingdao
+          region: cn-beijing
           init: touch ~/hello
           driveropts:
           consul: false
@@ -63,7 +63,7 @@ machine:
           disk:
              type: ssd
              capacity: 20g
-          region: cn-qingdao
+          region: cn-beijing
           init: touch ~/hello
           driveropts:
           consul: true
@@ -76,7 +76,7 @@ machine:
           disk: 
               type: ssd
               capacity: 20g
-          region: cn-qingdao
+          region: cn-beijing
           consul: true
 
 container:
@@ -84,7 +84,8 @@ container:
        - group: usertag-nginx
          port: 8408:8408
          num: 1
-         image: 123.57.88.212:5000/weibo/nginx
+         # image: 123.57.88.212:5000/weibo/nginx
+         image: 123.57.88.212:5000/tangyang/usertag-nginx
          restart: false
          url: if.nginx
          machine: usertag-nginx
@@ -121,9 +122,13 @@ container:
             - REDIS_PASS=**None**
 
 servicediscover:
-  webnginx:
-    driver: nginx-push
-    upstream: discover
+  # webnginx:
+  #   driver: nginx-push
+  #   upstream: discover
+  #   container: usertag-nginx
+  webnginx: 
+    driver: nginx-consul
+    upstream: usertag
     container: usertag-nginx
 
 consulcluster:

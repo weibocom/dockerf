@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/weibocom/dockerf/cluster"
+	dcluster "github.com/weibocom/dockerf/cluster"
 	"github.com/weibocom/dockerf/discovery"
 	dutils "github.com/weibocom/dockerf/utils"
 )
@@ -24,7 +24,8 @@ type NginxServiceRegisterDriver struct {
 	httpClient *http.Client
 }
 
-func newNginxDriver(driverConfig cluster.ServiceDiscoverDiscription) (*discovery.ServiceRegisterDriver, error) {
+func newNginxDriver(cluster *dcluster.Cluster) (*discovery.ServiceRegisterDriver, error) {
+	driverConfig, _ := discovery.GetServiceRegistryDescription(NGINX_DRIVER_NAME, cluster)
 	us, ok := driverConfig["upstream"]
 	if !ok {
 		return nil, errors.New("Nginx driver option missed: 'upstream'")

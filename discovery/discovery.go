@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/weibocom/dockerf/cluster"
+	dcluster "github.com/weibocom/dockerf/cluster"
 	"sync"
 )
 
@@ -26,26 +27,15 @@ var (
 	ServRegDrivers   map[string]ServiceRegisterDriver
 	ErrNotSupported  = errors.New("driver not supported")
 	dcLock           sync.Mutex
-	driverCreateFuns map[string]func(driverConfig cluster.ServiceDiscoverDiscription) (*ServiceRegisterDriver, error)
+	driverCreateFuns map[string]func(cluster *dcluster.Cluster) (*ServiceRegisterDriver, error)
 )
 
 func init() {
 	ServRegDrivers = make(map[string]ServiceRegisterDriver)
-	driverCreateFuns = map[string]func(driverConfig cluster.ServiceDiscoverDiscription) (*ServiceRegisterDriver, error){}
+	driverCreateFuns = map[string]func(cluster *dcluster.Cluster) (*ServiceRegisterDriver, error){}
 }
 
-func AddDriver(driver ServiceRegisterDriver) error {
-	driverLock.Lock()
-	defer driverLock.Unlock()
-	// dName := driver.Name()
-	// if _, ok := ServRegDrivers[dName]; ok {
-	// 	return errors.New(fmt.Sprintf("Driver('%s') is already registered.", dName))
-	// }
-	// ServRegDrivers[dName] = driver
-	return nil
-}
-
-func RegDriverCreateFunction(driverName string, creatorFun func(driverConfig cluster.ServiceDiscoverDiscription) (*ServiceRegisterDriver, error)) error {
+func RegDriverCreateFunction(driverName string, creatorFun func(cluster *dcluster.Cluster) (*ServiceRegisterDriver, error)) error {
 	dcLock.Lock()
 	defer dcLock.Unlock()
 	if f, ok := driverCreateFuns[driverName]; ok {
@@ -56,16 +46,26 @@ func RegDriverCreateFunction(driverName string, creatorFun func(driverConfig clu
 	}
 }
 
-func NewRegDriver(driverConfig cluster.ServiceDiscoverDiscription) (*ServiceRegisterDriver, error) {
-	driverName, ok := driverConfig["driver"]
-	if !ok {
-		return nil, errors.New("New register driver failed: 'drover' option missed.\n")
+func GetServiceRegistryDescription(driverName string, cluster *dcluster.Cluster) (cluster.ServiceDiscoverDiscription, error) {
+	for _, sdd := range cluster.ServiceDiscover {
+		if sdd["driver"] == driverName {
+			return sdd, nil
+		}
 	}
+	// It is not supposed to reach here.
+	return nil, errors.New("Fail to find an valid registry description, driver: " + driverName)
+}
+
+func NewRegDriver(driverName string, cluster *dcluster.Cluster) (*ServiceRegisterDriver, error) {
+	// driverName, ok := driverConfig["driver"]
+	// if !ok {
+	// 	return nil, errors.New("New register driver failed: 'drover' option missed.\n")
+	// }
 	driverFunc, ok := driverCreateFuns[driverName]
 	if !ok {
 		return nil, errors.New("Not a validate driver registered for '" + driverName + "'")
 	}
-	return driverFunc(driverConfig)
+	return driverFunc(cluster)
 }
 
 // func New(driverName string, urls []string, driverConfig cluster.ServiceDiscoverDiscription) (ServiceRegisterDriver, error) {
