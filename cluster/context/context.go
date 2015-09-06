@@ -88,7 +88,10 @@ func (ctx *ClusterContext) initContext() {
 	// ctx.parsePortBindings()
 
 	log.Info("Init container description")
-	ctx.initContainerDescription()
+	err := ctx.initContainerDescription()
+	if err != nil {
+		panic("Fail to init container description, err: " + err.Error())
+	}
 
 	supportedDrivers := strings.Join(ctx.clusterDesc.Machine.Cloud.SurportedDrivers(), ",")
 	log.Infof("Create a new machine proxy. cluster by:%s, supported drivers:%s, discovery: %s, master: %s\n", ctx.clusterDesc.ClusterBy, supportedDrivers, ctx.clusterDesc.Discovery, ctx.clusterDesc.Master)
@@ -241,7 +244,7 @@ func (ctx *ClusterContext) initServiceDiscovery() error {
 	}
 
 	for sdName, sdd := range ctx.clusterDesc.ServiceDiscover {
-		driver, err := discovery.NewRegDriver(sdd)
+		driver, err := discovery.NewRegDriver(sdd["driver"], ctx.clusterDesc)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Failed to create Reg Driver:'%s'. err:%s", sdName, err.Error()))
 		}

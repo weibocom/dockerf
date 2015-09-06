@@ -102,12 +102,6 @@ func (d *DockerProxy) RunByConfig(runConfig ContainerRunConfig) (string, error) 
 
 	config.ExposedPorts = exposedPorts
 
-	cid, err := d.CreateContainer(config, runConfig.Name)
-	if err != nil {
-		return "", errors.New(fmt.Sprintf("Failed to create a container. name: %s, error: %s", runConfig.Name, err.Error()))
-	}
-	fmt.Printf("Container created. name:%s, id:%s\n", runConfig.Name, cid)
-
 	hostConfig := &dockerclient.HostConfig{}
 
 	hostConfig.PortBindings = portBingds
@@ -117,6 +111,14 @@ func (d *DockerProxy) RunByConfig(runConfig ContainerRunConfig) (string, error) 
 		Name:              runConfig.RestartPolicy.Name,
 		MaximumRetryCount: int64(runConfig.RestartPolicy.MaxTry),
 	}
+
+	config.HostConfig = *hostConfig
+
+	cid, err := d.CreateContainer(config, runConfig.Name)
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("Failed to create a container. name: %s, error: %s", runConfig.Name, err.Error()))
+	}
+	fmt.Printf("Container created. name:%s, id:%s\n", runConfig.Name, cid)
 
 	if err := d.StartContainer(cid, hostConfig); err != nil {
 		fmt.Printf("Failed to start container. name:%s, id:%s.\n", runConfig.Name, cid)

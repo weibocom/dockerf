@@ -59,13 +59,26 @@ func (mp *MachineClusterProxy) getDriverName(md dcluster.MachineDescription) str
 }
 
 func (mp *MachineClusterProxy) getMasterOptions(md dcluster.MachineDescription) []string {
-	masterOptions := []string{"-d", mp.getDriverName(md), "--swarm", "--swarm-master", "--swarm-discovery", mp.Discovery, "--engine-label", "role=master"}
+	masterOptions := []string{"-d", mp.getDriverName(md),
+		"--swarm",
+		"--swarm-master",
+		"--swarm-discovery", mp.Discovery,
+		"--engine-label", "role=master",
+		"--swarm-opt", "filter=port",
+		"--swarm-opt", "filter=affinity",
+		"--swarm-opt", "filter=constraint",
+	}
 	masterOptions = append(masterOptions, mp.getDriver(md).GetOptions()...)
 	return masterOptions
 }
 
 func (mp *MachineClusterProxy) getSlaveOptions(md dcluster.MachineDescription) []string {
-	slaveOptions := []string{"-d", mp.getDriverName(md), "--swarm", "--swarm-discovery", mp.Discovery, "--engine-label", "role=slave"}
+	slaveOptions := []string{"-d", mp.getDriverName(md),
+		"--swarm",
+		"--swarm-discovery", mp.Discovery,
+		"--engine-label", "role=slave",
+		// "--swarm-opt", "debug",
+	}
 	slaveOptions = append(slaveOptions, mp.getDriver(md).GetOptions()...)
 	return slaveOptions
 }
