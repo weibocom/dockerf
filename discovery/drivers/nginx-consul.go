@@ -3,14 +3,14 @@ package drivers
 import (
 	"errors"
 	"fmt"
-	"net/http"
-	"strings"
-	"time"
-
+	"github.com/Sirupsen/logrus"
 	consul "github.com/hashicorp/consul/api"
 	dcluster "github.com/weibocom/dockerf/cluster"
 	"github.com/weibocom/dockerf/discovery"
 	dutils "github.com/weibocom/dockerf/utils"
+	"net/http"
+	"strings"
+	"time"
 )
 
 type ConsulOperation string
@@ -80,7 +80,7 @@ func (ngxDrv *NginxConsulRegisterDriver) buildConsulUrl(upstream string, address
 }
 
 func (ngxDrv *NginxConsulRegisterDriver) operate(host string, port int, op ConsulOperation, callable func(kv *consul.KV, address string) error) error {
-	dutils.Debug(fmt.Sprintf("%s service to nginx consul, consul address:%s, host:%s, port:%d\n", op, ngxDrv.consulAddress, host, port))
+	logrus.Debug(fmt.Sprintf("%s service to nginx consul, consul address:%s, host:%s, port:%d\n", op, ngxDrv.consulAddress, host, port))
 	address := fmt.Sprintf("%s:%d", host, port)
 	kv := ngxDrv.client.KV()
 	err := callable(kv, address)
