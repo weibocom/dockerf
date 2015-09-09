@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	dimage "github.com/weibocom/dockerf/image"
 	dutils "github.com/weibocom/dockerf/utils"
 	"gopkg.in/yaml.v2"
 )
@@ -110,6 +111,7 @@ const (
 type ContainerDescription struct {
 	Num             int
 	Image           string
+	Repo            string
 	PreStop         string
 	PostStart       string
 	URL             string
@@ -269,6 +271,19 @@ func replaceContainerConfigInfo(cluster *Cluster) {
 	replacedContainerInfo := ContainerCluster{}
 	replacedTopology := ContainerTopology{}
 	for _, containerInfo := range cluster.Container.Topology {
+
+		// build image by @liubin8
+		if containerInfo.Repo != "" && containerInfo.Image != "" {
+			newImage, err := dimage.BuildAndPushByRepo(containerInfo.Repo, containerInfo.Image)
+			if err != nil {
+				panic(fmt.Sprintf("Build image failed: %v", err))
+			}
+
+			containerInfo.Image = newImage // update image
+		} else {
+			panic("Container should config 'repo' with 'image'")
+		}
+
 		replacedTopology = append(replacedTopology, parseMultiPort(containerInfo)...)
 	}
 	replacedContainerInfo.Topology = replacedTopology
