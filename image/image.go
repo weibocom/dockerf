@@ -90,7 +90,7 @@ func buildAndPushImageIfNeed(dir, imageURL string) error {
 	return nil
 }
 
-// @return: append commitId for imageURL
+// @return: append commitId for building imageURL
 func BuildAndPushByRepo(repo, image string) (string, error) {
 	localSource := TMP_DIR + image
 	commitId, err := gitCloneRepoIfNeed(localSource, repo)
@@ -104,7 +104,7 @@ func BuildAndPushByRepo(repo, image string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("Buil and push to Registry OK\n")
+	fmt.Printf("Build and push to Registry OK\n")
 
 	return imageURL, nil
 }
