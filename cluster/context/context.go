@@ -385,7 +385,8 @@ func (ctx *ClusterContext) initMachineSequence(mifs []dmachine.MachineInfo) {
 
 func (ctx *ClusterContext) getMaster() (dmachine.MachineInfo, bool) {
 	for _, mi := range ctx.machineInfos {
-		if mi.IsMaster() {
+		fmt.Printf("ctx.clusterDesc.Master: %s, mi name: %s \n", ctx.clusterDesc.Master, mi.Name)
+		if mi.IsMaster() && mi.Name == ctx.clusterDesc.Master {
 			return mi, true
 		}
 	}

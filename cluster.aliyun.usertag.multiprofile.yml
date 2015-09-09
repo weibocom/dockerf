@@ -1,0 +1,160 @@
+clusterby: swarm
+master: ${masteraddress}
+# discovery: consul://101.200.173.242:8500/usertag
+discovery: ${discoveryaddress}
+
+machine:
+    os: ubuntu-14.04-64
+
+    cloud:
+       aliyun:
+          options: --aliyun-security-group-id usertag --engine-install-url https://get.daocloud.io/docker/ --engine-insecure-registry 123.57.88.212:5000 --swarm-image 123.57.88.212:5000/tangyang/swarm
+          globaloptions: --native-ssh
+          default: true
+       virtualbox:
+          options: --engine-insecure-registry 123.57.88.212:5000 --swarm-image 123.57.88.212:5000/library/swarm
+          globaloptions: --native-ssh
+
+    topology:
+       # consulcluster:
+       #    minnum: 3
+       #    maxnum: 3
+       #    cpu: 1
+       #    memory: 1g
+       #    disk:
+       #       type: ssd
+       #       capacity: 20g
+       #    region: cn-beijing
+       #    init: touch ~/hello
+       #    driveropts:
+       #    consul: false
+       #    group: consulcluster
+
+       -  group: usertag-master
+          minnum: 1
+          maxnum: 1
+          cpu: 2
+          memory: 2g
+          disk:
+             type: ssd
+             capacity: 20g
+          region: cn-beijing
+          init: touch ~/hello
+          driveropts:
+          consul: false
+
+       -  group: usertag-frontend
+          minnum: 1
+          maxnum: 1
+          cpu: 1
+          memory: 1g
+          disk:
+             type: ssd
+             capacity: 10240m
+          region: cn-beijing
+          init: touch ~/hello
+          driveropts:
+          consul: false
+
+       -  group: usertag-nginx
+          minnum: 1
+          maxnum: 1
+          cpu: 1
+          memory: 1g
+          disk:
+             type: ssd
+             capacity: 20g
+          region: cn-beijing
+          init: touch ~/hello
+          driveropts:
+          consul: true
+          
+       -  group: usertag-redis
+          minnum: 2
+          maxnum: 2
+          cpu: 1
+          memory: 1g
+          disk: 
+              type: ssd
+              capacity: 20g
+          region: cn-beijing
+          consul: true
+
+container:
+   topology:
+       - group: usertag-nginx
+         port: 8408:8408
+         num: 1
+         # image: 123.57.88.212:5000/weibo/nginx
+         image: 123.57.88.212:5000/tangyang/usertag-nginx
+         restart: false
+         url: if.nginx
+         machine: usertag-nginx
+         volums:
+            - /var:/var
+
+       - group: usertag-frontend
+         port: 40000~50000:8080
+         num: ${frontendcontainernum}
+         image: 123.57.88.212:5000/weibo_rd_user/user_tag:1.2-SNAPSHOT
+         prestop: touch ~/503  # execute some shell commands on the machine, not in container, before stop the service 
+         poststart: touch ~/200
+         restart: true
+         servicediscover: webnginx
+         machine: usertag-frontend
+
+       - group: usertag-redis-first-{port}
+         port: 8861|8862:6379
+         num: 1
+         image: 123.57.88.212:5000/library/redis
+         restart: false
+         url: first.rm{port}
+         machine: usertag-redis
+         env: 
+            - REDIS_PASS=**None**
+       - group: usertag-redis-second-{port}
+         port: 8861|8862:6379
+         num: 1
+         image: 123.57.88.212:5000/library/redis
+         restart: false
+         url: second.rm{port}
+         machine: usertag-redis
+         env: 
+            - REDIS_PASS=**None**
+
+servicediscover:
+  # webnginx:
+  #   driver: nginx-push
+  #   upstream: discover
+  #   container: usertag-nginx
+  webnginx: 
+    driver: nginx-consul
+    upstream: usertag
+    container: usertag-nginx
+
+consulcluster:
+   server:
+      service: weibo
+      image: 123.57.88.212:5000/progrium/consul
+      domain: weibo
+      ips: 
+         - 101.200.173.242
+      nodes:
+         # - consulcluster-1
+         # - consulcluster-2
+         # - consulcluster-3
+      machine: consulcluster
+   agent:
+      image: 123.57.88.212:5000/progrium/consul
+   registrator:
+      image: 123.57.88.212:5000/progrium/registrator
+
+profiles: 
+  production: 
+    masteraddress: usertag-master-1
+    frontendcontainernum: 2
+    discoveryaddress: consul://101.200.173.242:8500/usertag
+  test:
+    masteraddress: usertag-master-2
+    frontendcontainernum: 1
+    discoveryaddress: consul://101.200.173.242:8500/test-usertag

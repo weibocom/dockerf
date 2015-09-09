@@ -269,27 +269,7 @@ func (d *Driver) PreCreateCheck() error {
 	}
 
 	if d.SecurityGroupId == "" {
-		// Create new security group
-		groupResp, err := cli.SecurityGroup.CreateSecurityGroup(map[string]string{
-			"RegionId":          d.RegionId,
-			"SecurityGroupName": groupPrefix + getGuid(),
-		})
-		if err != nil {
-			return err
-		}
-		d.SecurityGroupId = groupResp.SecurityGroupId
-
-		// Make security group accessible from network
-		_, err = cli.SecurityGroup.AuthorizeSecurityGroup(map[string]string{
-			"RegionId":        d.RegionId,
-			"SecurityGroupId": d.SecurityGroupId,
-			"IpProtocol":      "all",
-			"PortRange":       "-1/-1",
-			"SourceCidrIp":    "0.0.0.0/0",
-		})
-		if err != nil {
-			return err
-		}
+		return d.createSecureGroup(cli, "", d.RegionId)
 	} else {
 		// Check if security group id valid
 		_, groupErr := cli.SecurityGroup.DescribeSecurityGroupAttribute(map[string]string{
@@ -299,7 +279,8 @@ func (d *Driver) PreCreateCheck() error {
 		if groupErr != nil {
 			if e, ok := groupErr.(*util.SdkError); ok {
 				if e.Resp.Code == groupNotFoundErr {
-					return fmt.Errorf("security group id is not valid: %s", d.SecurityGroupId)
+					return d.createSecureGroup(cli, d.SecurityGroupId, d.RegionId)
+					// return fmt.Errorf("security group id is not valid: %s", d.SecurityGroupId)
 				}
 			}
 			return groupErr
@@ -308,6 +289,31 @@ func (d *Driver) PreCreateCheck() error {
 	}
 
 	return nil
+}
+
+func (d *Driver) createSecureGroup(cli *ecs.EcsClient, secureGroupId string, regionId string) error {
+	// Create new security group
+	if secureGroupId == "" {
+		secureGroupId = groupPrefix + getGuid()
+	}
+	groupResp, err := cli.SecurityGroup.CreateSecurityGroup(map[string]string{
+		"RegionId":          regionId,
+		"SecurityGroupName": secureGroupId,
+	})
+	if err != nil {
+		return err
+	}
+	d.SecurityGroupId = groupResp.SecurityGroupId
+
+	// Make security group accessible from network
+	_, err = cli.SecurityGroup.AuthorizeSecurityGroup(map[string]string{
+		"RegionId":        d.RegionId,
+		"SecurityGroupId": d.SecurityGroupId,
+		"IpProtocol":      "all",
+		"PortRange":       "-1/-1",
+		"SourceCidrIp":    "0.0.0.0/0",
+	})
+	return err
 }
 
 func (d *Driver) Create() error {
