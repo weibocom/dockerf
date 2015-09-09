@@ -12,7 +12,10 @@ import (
 	dcontext "github.com/weibocom/dockerf/cluster/context"
 )
 
-const DEFAULT_CLUSTER_FILE = "cluster.yml"
+const (
+	DEFAULT_CLUSTER_FILE = "cluster.yml"
+	DEFAULT_PROFILE_FILE = "profile.yml"
+)
 
 func GetClusterSubCmdFlags(name, signature, description string, exitOnError bool) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
@@ -66,7 +69,7 @@ func (ccli *ClusterCli) Cmd(args ...string) error {
 
 func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 	fs := GetClusterSubCmdFlags("deploy", " PATH", "Deploy all containers on the cluster, which dedcriped by yaml file at PATH", true)
-	flFile := fs.String([]string{"f", "-file"}, "", "Name of the Cluster yaml file(Default is PATH/cluster.yml")
+	flFile := fs.String([]string{"f", "-file"}, "", "Name of the Cluster yaml file(Default is PATH/cluster.yml)...")
 
 	flMScaleIn := fs.Bool([]string{"-m-scale-in"}, false, "Destroy extra num of machines, where extra-num is active machines minus necessaries in cluster.yml")
 	flMScaleOut := fs.Bool([]string{"-m-scale-out"}, false, "Create extra num of machines, where extra-num is necessary machines minus actives in cluster.yml")
@@ -77,6 +80,8 @@ func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 	flCScaleIn := fs.Bool([]string{"-c-scale-in"}, false, "Stop extra num of containers, where extra-num is active machines minus necessaries in cluster.yml")
 	flCScaleOut := fs.Bool([]string{"-c-scale-out"}, false, "Run extra num of container, where extra-num is necessary machines minus actives in cluster.yml")
 	flCStep := fs.Int([]string{"-c-step-percent"}, 25, "Process the percent of total container simultaneously")
+	flProfileFile := fs.String([]string{"--profile-file"}, "", "Name of the profile yaml file(Default is PATH/profile.yml)... ")
+	flActiveProfile := fs.String([]string{"-profile"}, "", "Active profile name.")
 	// flCForceRestart := fs.Bool([]string{"-c-force-restart"}, false, "Force restart an running container, when the image is eual with which configured in cluster.yml")
 
 	fs.Parse(args)
@@ -99,7 +104,7 @@ func (ccli *ClusterCli) CmdDeploy(args ...string) error {
 	ccli.checkContainerFilter(containerFilters, *flCScaleOut, *flCScaleIn)
 
 	path := fs.Args()[0]
-	cluster := buildCluster(*flFile, path)
+	cluster := buildCluster(*flFile, path, *flActiveProfile, *flProfileFile)
 
 	context := dcontext.NewClusterContext(*flMScaleIn, *flMScaleOut, *flCScaleIn, *flCScaleOut, *flCRemove, containerFilters, *flCStep, cluster)
 
@@ -168,10 +173,13 @@ func (ccli *ClusterCli) getMethod(args ...string) (func(...string) error, bool) 
 	return method.Interface().(func(...string) error), true
 }
 
-func buildCluster(name, path string) *dcluster.Cluster {
+func buildCluster(name, path, profile, profileFileName string) *dcluster.Cluster {
 	fileName := name
 	if fileName == "" {
 		fileName = DEFAULT_CLUSTER_FILE
+	}
+	if profileFileName == "" {
+		profileFileName = DEFAULT_PROFILE_FILE
 	}
 	file := ""
 	seperator := "/"
@@ -180,7 +188,7 @@ func buildCluster(name, path string) *dcluster.Cluster {
 	} else {
 		file = path + seperator + fileName
 	}
-	cluster, err := dcluster.NewCluster(file)
+	cluster, err := dcluster.NewCluster(file, profile, profileFileName)
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Printf("Cannot locate Clusterfile: '%s'\n", file)

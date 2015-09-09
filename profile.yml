@@ -1,0 +1,11 @@
+activeprofile: test
+
+profiles: 
+  production: 
+    masteraddress: usertag-master-1
+    frontendcontainernum: 2
+    discoveryaddress: consul://101.200.173.242:8500/usertag
+  test:
+    masteraddress: usertag-master-2
+    frontendcontainernum: 1
+    discoveryaddress: consul://101.200.173.242:8500/test-usertag

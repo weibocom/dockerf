@@ -7,8 +7,11 @@ import (
 	"strconv"
 	"strings"
 
+	"errors"
 	dutils "github.com/weibocom/dockerf/utils"
 	"gopkg.in/yaml.v2"
+	"os"
+	"regexp"
 )
 
 type Disk struct {
@@ -105,6 +108,7 @@ const (
 	ContainerDescription_TYPE_SD = 1
 	ContainerDescription_TYPE_BZ = 2
 	MultiPort_Separator          = "|"
+	CONFIG_PLACEHOLDER_PATTERN   = "\\$\\{(\\w+)\\}"
 )
 
 type ContainerDescription struct {
@@ -184,6 +188,12 @@ type ConsulDescription struct {
 
 type ServiceDiscoverDiscription map[string]string
 
+type Profile map[string]string
+
+func (p *Profile) lenth() int {
+	return len(map[string]string(*p))
+}
+
 type Cluster struct {
 	ClusterBy   string // such as swarm
 	Master      string
@@ -198,23 +208,88 @@ type Cluster struct {
 	ConsulCluster   ConsulDescription
 }
 
-func NewCluster(configFilePos string) (*Cluster, error) {
-	c := &Cluster{}
+type ClusterProfiles struct {
+	ActiveProfile string
+	Profiles      map[string]Profile
+}
+
+func (p *ClusterProfiles) findProfile(profileName string) (Profile, error) {
+	if profileName != "" {
+		p.ActiveProfile = profileName
+	}
+
+	if profile, exist := p.Profiles[p.ActiveProfile]; !exist {
+		return nil, errors.New(fmt.Sprintf("Fail to find profile %s in config files, please check again... ", p.ActiveProfile))
+	} else {
+		return profile, nil
+	}
+}
+
+func NewCluster(configFilePos, profileName, profileFileName string) (*Cluster, error) {
+
+	clusterProfiles, exist, err := resolveProfileFile(profileFileName)
+	if err != nil {
+		return nil, err
+	}
+
 	b, err := ioutil.ReadFile(configFilePos)
 	if err != nil {
 		return nil, err
 	}
+	if exist {
+		profile, err := clusterProfiles.findProfile(profileName)
+		if err != nil {
+			return nil, err
+		}
+		log.Debugf("Use profile %+v", profile)
+		b = []byte(applyProfile(profile, string(b)))
+	}
+
+	c := &Cluster{}
 	err = yaml.Unmarshal(b, c)
 	if err != nil {
 		return nil, err
 	}
 
-	replaceClusterConfigInfo(c)
+	c.replaceClusterConfigInfo()
 
 	return c, nil
 }
 
-func parsePortBindings(cluster *Cluster) error {
+func resolveProfileFile(profileFileName string) (*ClusterProfiles, bool, error) {
+	clusterProfiles := &ClusterProfiles{}
+	b, err := ioutil.ReadFile(profileFileName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		} else {
+			return nil, true, err
+		}
+	}
+	err = yaml.Unmarshal(b, clusterProfiles)
+	if err != nil {
+		return nil, true, err
+	}
+	return clusterProfiles, true, nil
+}
+
+func applyProfile(profile Profile, configContent string) string {
+	if profile.lenth() <= 0 {
+		return configContent
+	}
+
+	reg := regexp.MustCompile(CONFIG_PLACEHOLDER_PATTERN)
+	return reg.ReplaceAllStringFunc(configContent, func(b string) string {
+		key := reg.ReplaceAllString(b, "${1}")
+		if value, exist := profile[key]; exist {
+			return value
+		} else {
+			panic(fmt.Sprintf("Fail to apply profile , because a config item named %s is not well configured..,", key))
+		}
+	})
+}
+
+func (cluster *Cluster) parsePortBindings() error {
 	for group, description := range cluster.Container.Topology {
 		binding := PortBinding{}
 		if err := binding.Parse(description.Port); err != nil {
@@ -227,7 +302,7 @@ func parsePortBindings(cluster *Cluster) error {
 	return nil
 }
 
-func parseMultiPort(cd ContainerDescription) []ContainerDescription {
+func (cluster *Cluster) parseMultiPort(cd ContainerDescription) []ContainerDescription {
 	port := cd.Port
 	hostport := ContainerPort(port).GetHostPort()
 	if strings.Contains(hostport, MultiPort_Separator) {
@@ -261,29 +336,29 @@ func parseMultiPort(cd ContainerDescription) []ContainerDescription {
 	return []ContainerDescription{cd}
 }
 
-func replaceClusterConfigInfo(cluster *Cluster) {
-	replaceContainerConfigInfo(cluster)
+func (cluster *Cluster) replaceClusterConfigInfo() {
+	cluster.replaceContainerConfigInfo()
 }
 
-func replaceContainerConfigInfo(cluster *Cluster) {
+func (cluster *Cluster) replaceContainerConfigInfo() {
 	replacedContainerInfo := ContainerCluster{}
 	replacedTopology := ContainerTopology{}
 	for _, containerInfo := range cluster.Container.Topology {
-		replacedTopology = append(replacedTopology, parseMultiPort(containerInfo)...)
+		replacedTopology = append(replacedTopology, cluster.parseMultiPort(containerInfo)...)
 	}
 	replacedContainerInfo.Topology = replacedTopology
 	cluster.Container = replacedContainerInfo
 
-	if err := parsePortBindings(cluster); err != nil {
-		panic("Fail to parse port binding info, please check config file... ")
+	if err := cluster.parsePortBindings(); err != nil {
+		log.Fatal("Fail to parse port binding info, please check config file... ")
 	}
 
 	for index, containerInfo := range cluster.Container.Topology {
-		cluster.Container.Topology[index] = replaceContainerPlaceholder(containerInfo)
+		cluster.Container.Topology[index] = cluster.replaceContainerPlaceholder(containerInfo)
 	}
 }
 
-func replaceContainerPlaceholder(cd ContainerDescription) ContainerDescription {
+func (cluster *Cluster) replaceContainerPlaceholder(cd ContainerDescription) ContainerDescription {
 	cd.URL = strings.Replace(cd.URL, "{port}", strconv.Itoa(cd.PortBinding.GetHostPort()), -1)
 	cd.Group = strings.Replace(cd.Group, "{port}", strconv.Itoa(cd.PortBinding.GetHostPort()), -1)
 	return cd
