@@ -37,23 +37,23 @@ func gitCloneRepoIfNeed(dir, repo string) (string, error) {
 	//if _, err := os.Stat(dir); err == nil { // exist
 
 	// rm -rf dir
-	_, err := run(".", "rm", "-rf", dir)
-	if err != nil {
+	//_, err := run(".", "rm", "-rf", dir)
+	if err := os.RemoveAll(dir); err != nil {
 		fmt.Printf("Failed to rm exist source dir '%s'\n", dir)
 		return "", err
 	}
 	fmt.Printf("Removed exist source dir '%s'\n", dir)
 
 	// mkdir -p dir
-	_, err = run(".", "mkdir", "-p", dir)
-	if err != nil {
+	//_, err = run(".", "mkdir", "-p", dir)
+	if err := os.MkdirAll(dir, 0777); err != nil {
 		fmt.Printf("Failed to create source dir '%s'\n", dir)
 		return "", err
 	}
 	fmt.Printf("Create source dir '%s'\n", dir)
 
 	// git clone repo dir
-	_, err = run(".", "git", "clone", repo, dir)
+	_, err := run(".", "git", "clone", repo, dir)
 	if err != nil {
 		fmt.Printf("Failed to git clone source code '%s'\n", repo)
 		return "", err

@@ -273,15 +273,17 @@ func replaceContainerConfigInfo(cluster *Cluster) {
 	for _, containerInfo := range cluster.Container.Topology {
 
 		// build image by @liubin8
-		if containerInfo.Repo != "" && containerInfo.Image != "" {
-			newImage, err := dimage.BuildAndPushByRepo(containerInfo.Repo, containerInfo.Image)
-			if err != nil {
-				panic(fmt.Sprintf("Build image failed: %v", err))
-			}
+		if containerInfo.Repo != "" {
+			if containerInfo.Image != "" {
+				newImage, err := dimage.BuildAndPushByRepo(containerInfo.Repo, containerInfo.Image)
+				if err != nil {
+					panic(fmt.Sprintf("Build image failed: %v", err))
+				}
 
-			containerInfo.Image = newImage // update image
-		} else {
-			panic("Container should config 'repo' with 'image'")
+				containerInfo.Image = newImage // update image
+			} else {
+				panic("Container should config 'repo' with 'image'")
+			}
 		}
 
 		replacedTopology = append(replacedTopology, parseMultiPort(containerInfo)...)
