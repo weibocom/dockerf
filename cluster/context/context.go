@@ -739,6 +739,8 @@ func (ctx *ClusterContext) runContainer(cd *dcluster.ContainerDescription, grp s
 	log.Infof("Run a new container. name:%s, image:%s, group:%s.\n", name, cd.Image, group)
 	envs := []string{"constraint:role==slave", "constraint:group==" + cd.Machine}
 	envs = append(envs, cd.Env...)
+	envs = append(envs, "CONSUL_URL="+fmt.Sprintf("%s:8500", ctx.clusterDesc.ConsulCluster.Server.IPs[0]))
+
 	if cd.URL != "" {
 		url := cd.URL
 		idx := strings.IndexAny(url, ".")

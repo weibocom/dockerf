@@ -81,14 +81,25 @@ machine:
 
 container:
    topology:
-       - group: usertag-nginx
-         port: 8408:8408
+       # - group: usertag-nginx
+       #   port: 8408:8408
+       #   num: 1
+       #   # image: 123.57.88.212:5000/weibo/nginx
+       #   image: 123.57.88.212:5000/tangyang/usertag-nginx
+       #   restart: false
+       #   url: if.nginx
+       #   machine: usertag-nginx
+       #   volums:
+       #      - /var:/var
+       - group: usertag-haproxy
+         port: 8090:8090
          num: 1
-         # image: 123.57.88.212:5000/weibo/nginx
-         image: 123.57.88.212:5000/tangyang/usertag-nginx
+         image: 123.57.88.212:5000/tangyang/haproxy-consul
          restart: false
-         url: if.nginx
+         url: if.haproxy
          machine: usertag-nginx
+         env:
+            - HAPROXY_SERVICE_NAME=usertag
          volums:
             - /var:/var
 
@@ -99,7 +110,7 @@ container:
          prestop: touch ~/503  # execute some shell commands on the machine, not in container, before stop the service 
          poststart: touch ~/200
          restart: true
-         servicediscover: webnginx
+         servicediscover: haproxy-consul
          machine: usertag-frontend
 
        - group: usertag-redis-first-{port}
@@ -126,10 +137,13 @@ servicediscover:
   #   driver: nginx-push
   #   upstream: discover
   #   container: usertag-nginx
-  webnginx: 
-    driver: nginx-consul
-    upstream: usertag
-    container: usertag-nginx
+  # webnginx: 
+  #   driver: nginx-consul
+  #   upstream: usertag
+  #   container: usertag-nginx
+  haproxy-consul:
+      driver: haproxy-consul
+      container: usertag-haproxy
 
 consulcluster:
    server:
