@@ -2,7 +2,10 @@ package machine
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
+	log "github.com/Sirupsen/logrus"
 	dcluster "github.com/weibocom/dockerf/cluster"
 	dopts "github.com/weibocom/dockerf/machine/opts"
 	dseq "github.com/weibocom/dockerf/sequence"
@@ -119,6 +122,13 @@ func (mp *MachineClusterProxy) IPs(machines []string) ([]string, error) {
 }
 
 func (mp *MachineClusterProxy) CreateMaster(md dcluster.MachineDescription) error {
+	if len(md.UnmanagedIps) > 0 {
+		masterAddress := md.UnmanagedIps[0]
+		if len(md.UnmanagedIps) > 1 {
+			log.Warnf("Multi master address is not currently supported, use first address %s instead...", masterAddress)
+		}
+		return mp.CreateUnmanagedMaster(md, masterAddress)
+	}
 	opts := mp.getMasterOptions(md)
 	extOpts, err := mp.GetOptionByDescription(md)
 	if err != nil {
@@ -145,6 +155,45 @@ func (mp *MachineClusterProxy) CreateSlave(md dcluster.MachineDescription) (stri
 		opts = append(opts, extOpts...)
 	}
 	return nodeName, mp.Proxy.Create(nodeName, mp.getDriver(md).GetGlobalOptions(), opts)
+}
+
+func (mp *MachineClusterProxy) CreateUnmanagedMaster(md dcluster.MachineDescription, address string) error {
+	opts := mp.getMasterOptions(md)
+	opts = append(opts, mp.getGenericOptions(address)...)
+	return mp.Proxy.Create(mp.Master, mp.getDriver(md).GetGlobalOptions(), opts)
+}
+
+func (mp *MachineClusterProxy) CreateUnmanagedSlave(md dcluster.MachineDescription, address string) (string, error) {
+	nodeName := mp.generateName(md.Group)
+	opts := []string{"--engine-label", "group=" + md.Group}
+	opts = append(opts, mp.getSlaveOptions(md)...)
+	opts = append(opts, mp.getGenericOptions(address)...)
+
+	return nodeName, mp.Proxy.Create(nodeName, mp.getDriver(md).GetGlobalOptions(), opts)
+}
+
+func (mp *MachineClusterProxy) getUnmanagedMachineIpPort(address string) (string, int) {
+	ipPort := strings.Split(address, ":")
+	ip := ipPort[0]
+	port := 22
+	if len(ipPort) > 1 {
+		p, err := strconv.Atoi(ipPort[1])
+		if err != nil {
+			log.Warnf("Fail to parse unmanged slave address %s, use a default ssh port instead... ", address)
+		} else {
+			port = p
+		}
+	}
+	return ip, port
+}
+
+func (mp *MachineClusterProxy) getGenericOptions(address string) []string {
+	ip, port := mp.getUnmanagedMachineIpPort(address)
+	options := []string{}
+	options = append(options, "--generic-ip-address", ip)
+	options = append(options, "--generic-ssh-port", strconv.Itoa(port))
+
+	return options
 }
 
 func (mp *MachineClusterProxy) CreateMachine(node string, md dcluster.MachineDescription, driverOptions []string) error {

@@ -13,6 +13,9 @@ machine:
        virtualbox:
           options: --engine-insecure-registry 123.57.88.212:5000 --swarm-image 123.57.88.212:5000/library/swarm
           globaloptions: --native-ssh
+       generic:
+          options: --generic-ssh-user root --generic-ssh-key /Users/tangyang/.ssh/id_rsa
+          globaloptions: --native-ssh
 
     topology:
        # consulcluster:
@@ -42,18 +45,22 @@ machine:
           driveropts:
           consul: false
 
+       # -  group: usertag-frontend
+       #    minnum: 1
+       #    maxnum: 1
+       #    cpu: 1
+       #    memory: 1g
+       #    disk:
+       #       type: ssd
+       #       capacity: 10240m
+       #    region: cn-beijing
+       #    init: touch ~/hello
+       #    driveropts:
+       #    consul: false
        -  group: usertag-frontend
-          minnum: 1
-          maxnum: 1
-          cpu: 1
-          memory: 1g
-          disk:
-             type: ssd
-             capacity: 10240m
-          region: cn-beijing
-          init: touch ~/hello
-          driveropts:
-          consul: false
+          cloud: generic
+          unmanagedips: 
+            - 101.200.76.142
 
        -  group: usertag-nginx
           minnum: 1

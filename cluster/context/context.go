@@ -1222,15 +1222,19 @@ func (ctx *ClusterContext) startMachines(machines []dmachine.MachineInfo, md dcl
 }
 
 func (ctx *ClusterContext) scaleMachineOutByGroup(md dcluster.MachineDescription) error {
-	min := md.MinNum
 	machines, err := ctx.mProxy.ListByGroup(md.Group)
 	if err != nil {
 		fmt.Printf("Failed to load machine for group:%s\n", err.Error())
 		return err
 	}
 
+	if len(md.UnmanagedIps) > 0 {
+		return ctx.createUnmanagedSlaves(md, machines)
+	}
+
 	fmt.Printf("Start stopped machines for group:%s\n", md.Group)
 	runningNum, restarted, err := ctx.startMachines(machines, md)
+	min := md.GetMinNum()
 	if err != nil {
 		fmt.Printf("Error happend when Start machines for group:%s. total running:%d, need: %d, err:%s\n", md.Group, runningNum, min, err.Error())
 	} else {
@@ -1309,7 +1313,7 @@ func (ctx *ClusterContext) startMaster() error {
 	masterMachineInfo, exists := ctx.getMaster()
 	if !exists {
 		if ctx.create {
-			fmt.Printf("Master is not exists on the cluster, creating an new master.\n")
+			log.Debugf("Master is not exists on the cluster, creating an new master.\n")
 			group := ctx.clusterDesc.MasterGroup
 			if group == "" {
 				group, _ = dmachine.ParseMachineName(ctx.clusterDesc.Master)
@@ -1322,7 +1326,7 @@ func (ctx *ClusterContext) startMaster() error {
 				return err
 			}
 			ctx.reloadMachineInfos()
-			fmt.Printf("Master node create and running.\n")
+			log.Debugf("Master node create and running.\n")
 		} else {
 			return errors.New("Master Not Exists.")
 		}

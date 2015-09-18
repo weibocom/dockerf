@@ -20,17 +20,18 @@ type Disk struct {
 }
 
 type MachineDescription struct {
-	MaxNum     int
-	MinNum     int
-	Cpu        int
-	Disk       Disk
-	Memory     string
-	Init       string
-	Region     string
-	Consul     bool
-	DriverOpts []string
-	Cloud      string
-	Group      string
+	MaxNum       int
+	MinNum       int
+	Cpu          int
+	Disk         Disk
+	Memory       string
+	Init         string
+	Region       string
+	Consul       bool
+	DriverOpts   []string
+	Cloud        string
+	Group        string
+	UnmanagedIps []string
 }
 
 func (md *MachineDescription) GetCpu() int {
@@ -60,6 +61,22 @@ func (md *MachineDescription) GetDiskCapacityInBytes() int {
 	} else {
 		return bytes
 	}
+}
+
+func (md *MachineDescription) GetMaxNum() int {
+	unmanagedIpSize := len(md.UnmanagedIps)
+	if unmanagedIpSize > 0 {
+		return unmanagedIpSize
+	}
+	return md.MaxNum
+}
+
+func (md *MachineDescription) GetMinNum() int {
+	unmanagedIpSize := len(md.UnmanagedIps)
+	if unmanagedIpSize > 0 {
+		return unmanagedIpSize
+	}
+	return md.MinNum
 }
 
 type CloudDrivers map[string]CloudDriverDescription
