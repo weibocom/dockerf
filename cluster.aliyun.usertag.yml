@@ -98,8 +98,6 @@ container:
          restart: false
          url: if.haproxy
          machine: usertag-nginx
-         env:
-            - HAPROXY_SERVICE_NAME=usertag
          volums:
             - /var:/var
 
@@ -144,6 +142,7 @@ servicediscover:
   haproxy-consul:
       driver: haproxy-consul
       container: usertag-haproxy
+      service: usertag
 
 consulcluster:
    server:
