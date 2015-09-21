@@ -3,7 +3,7 @@ package drivers
 import (
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
+	// log "github.com/Sirupsen/logrus"
 	consul "github.com/hashicorp/consul/api"
 	dcluster "github.com/weibocom/dockerf/cluster"
 	"github.com/weibocom/dockerf/discovery"
@@ -13,7 +13,6 @@ import (
 
 const (
 	HAPROXY_CONSUL_DRIVER_NAME = "haproxy-consul"
-	SERVICE_NAME_KEY           = "HAPROXY_SERVICE_NAME"
 	DEFAULT_DATACENTER         = "dc1"
 )
 
@@ -28,9 +27,9 @@ func newHaproxyConsulRegisterDriver(cluster *dcluster.Cluster) (*discovery.Servi
 	if !ok || driverName != HAPROXY_CONSUL_DRIVER_NAME {
 		return nil, errors.New(fmt.Sprintf("Driver name '%s' is expected, but get '%s'", HAPROXY_CONSUL_DRIVER_NAME, driverName))
 	}
-	serviceName, err := resolveServiceName(cluster, driverConfig)
-	if err != nil {
-		return nil, err
+	service, ok := driverConfig["service"]
+	if !ok {
+		return nil, errors.New("Haproxy driver option missed: 'upstream'")
 	}
 
 	config := consul.DefaultConfig()
@@ -41,32 +40,9 @@ func newHaproxyConsulRegisterDriver(cluster *dcluster.Cluster) (*discovery.Servi
 		return nil, err
 	}
 
-	d := HaproxyConsulRegisterDriver{serviceName: serviceName, catalog: client.Catalog()}
+	d := HaproxyConsulRegisterDriver{serviceName: service, catalog: client.Catalog()}
 	var pi discovery.ServiceRegisterDriver = &d
 	return &pi, nil
-}
-
-func resolveServiceName(cluster *dcluster.Cluster, sdd dcluster.ServiceDiscoverDiscription) (string, error) {
-	containerGroup, ok := sdd["container"]
-	if !ok {
-		return "", errors.New("Nginx driver option missed: 'container'")
-	}
-	description, exists := cluster.Container.Topology.GetDescription(containerGroup)
-	if !exists {
-		return "", errors.New(fmt.Sprintf("Fail to find container description for container group: %s...", containerGroup))
-	}
-	for _, env := range description.Env {
-		kv := strings.Split(env, "=")
-		if len(kv) < 2 {
-			log.Debugf("Invalid container env %s", env)
-			continue
-		}
-		if kv[0] == SERVICE_NAME_KEY {
-			log.Debugf("Find service name for haproxy %s", env)
-			return kv[1], nil
-		}
-	}
-	return "", errors.New(fmt.Sprintf("Fail to find service name from container env, containerGroup: %s", containerGroup))
 }
 
 func init() {
