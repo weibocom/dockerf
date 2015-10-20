@@ -25,8 +25,6 @@ func init() {
 		help := "\nCommands:\n"
 
 		for _, command := range [][]string{
-			{"machine", "Create and manage machines running Docker."},
-			{"container", "A self-sufficient runtime for linux containers."},
 			{"cluster", "Deploy and manage a cluster of containers on containers which running on machines."},
 		} {
 			help += fmt.Sprintf("    %-10.10s%s\n", command[0], command[1])

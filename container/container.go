@@ -3,6 +3,7 @@ package container
 import (
 	"strings"
 
+	"github.com/samalba/dockerclient"
 	dcluster "github.com/weibocom/dockerf/cluster"
 )
 
@@ -42,4 +43,43 @@ type ContainerRunConfig struct {
 	Bindings      []string
 	DNS           []string
 	RestartPolicy RestartPolicy
+}
+
+type Container struct {
+	dockerclient.Container
+}
+
+func (c *Container) Name() string {
+	if len(c.Names) == 0 {
+		return ""
+	}
+	name := c.Names[0]
+	idx := strings.IndexAny(name, "/")
+	if idx < 0 {
+		return name
+	}
+	return name[idx+1:]
+}
+
+func (c *Container) IsRunning() bool {
+	lower := strings.ToLower(c.Status)
+	splits := strings.SplitN(lower, " ", 2)
+	status := splits[0]
+	switch status {
+	case "running", "restarting":
+		return true
+	case "up":
+		if strings.Contains(lower, "paused") {
+			return false
+		}
+		return true
+	default:
+		return false
+	}
+	return false
+}
+
+func (c *Container) IsPaused() bool {
+	lower := strings.ToLower(c.Status)
+	return strings.Contains(lower, "paused")
 }

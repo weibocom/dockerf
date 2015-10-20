@@ -2,16 +2,18 @@ package cluster
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
 	"strconv"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
+
 	"errors"
-	dutils "github.com/weibocom/dockerf/utils"
-	"gopkg.in/yaml.v2"
 	"os"
 	"regexp"
+
+	dutils "github.com/weibocom/dockerf/utils"
+	"gopkg.in/yaml.v2"
 )
 
 type Disk struct {
