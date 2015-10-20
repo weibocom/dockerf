@@ -9,8 +9,9 @@ import (
 
 var ClusterFlag = flag.NewFlagSet("cluster", flag.ExitOnError)
 
+var flHelp = ClusterFlag.Bool([]string{"h", "-help"}, false, "Print usage")
+
 func init() {
-	flHelp = ClusterFlag.Bool([]string{"h", "-help"}, false, "Print usage")
 
 	ClusterFlag.Usage = func() {
 		fmt.Fprint(os.Stdout, "Usage: dockerf cluster [COMMAND] [args]\n\nManage the whole cluster of containers.\n\nOptions:\n")
