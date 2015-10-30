@@ -34,6 +34,10 @@ func serviceAndRegion(host string) (service string, region string) {
 	service = "s3"
 
 	parts := strings.Split(host, ".")
+	if strings.HasSuffix(host, ".cn") {
+		service, region = serviceAndRegionForCn(parts)
+		return
+	}
 	if len(parts) == 4 {
 		// Either service.region.amazonaws.com or virtual-host.region.amazonaws.com
 		if parts[1] == "s3" {
@@ -58,6 +62,12 @@ func serviceAndRegion(host string) (service string, region string) {
 		region = "us-east-1"
 	}
 
+	return
+}
+
+func serviceAndRegionForCn(parts []string) (service string, region string) {
+	service = parts[0]
+	region = parts[1]
 	return
 }
 
