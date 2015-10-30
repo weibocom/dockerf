@@ -11,9 +11,10 @@ import (
 
 type Cluster struct {
 	sync.Mutex
-	machines    []*Machine
-	provider    *libmachine.Provider
-	authOptions *AuthOptions
+	machines      map[string]*Machine
+	provider      *libmachine.Provider
+	authOptions   *AuthOptions
+	globleOptions *options.Options
 }
 
 func NewCluster(gopt *options.Options) (*Cluster, error) {
@@ -30,16 +31,18 @@ func NewCluster(gopt *options.Options) (*Cluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	machines := make([]*Machine, len(hosts))
-	for idx, h := range hosts {
-		machines[idx] = &Machine{
+	machines := make(map[string]*Machine, len(hosts))
+	for _, h := range hosts {
+		machines[h.Name] = &Machine{
 			Host: h,
 		}
 	}
 
-	return &Cluster{
+	c := &Cluster{
 		provider:    provider,
 		machines:    machines,
 		authOptions: auth,
-	}, nil
+	}
+	c.LoadStates()
+	return c, nil
 }

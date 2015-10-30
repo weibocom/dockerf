@@ -1,4 +1,4 @@
-package opts
+package options
 
 var (
 	instanceTypes map[string]string

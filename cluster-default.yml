@@ -6,19 +6,22 @@ machine:
         disk: 10g
         cloud-driver: virtualbox
         native-ssh: true
-        storage-path: /Users/crystal/.docker/machine/
+        restart: true
+        create: true
+        remove: true
 
     clouds:
        virtualbox:
        aliyun:
 
     descriptions:
-       - group: master
+       - group: swarm-master
          min-num: 1
          max-num: 1
          cpu: 1
          memory: 1g
          disk: 5g
+         master: true
 
        - group: frontend
          min-num: 1
@@ -26,6 +29,21 @@ machine:
          cpu: 1
          memory: 512m
          disk: 5g
+         create: true
+         restart: true
+         remove: true
+         cloud-driver: virtualbox
+         driver-options:
+
+       - group: nginx
+         min-num: 1
+         max-num: 1
+         cpu: 1
+         memory: 512m
+         disk: 5g
+         create: true
+         restart: true
+         remove: true
          cloud-driver: virtualbox
          driver-options:
 
@@ -39,12 +57,13 @@ container:
 
    cluster: 
       master-machine-name: swarm-master
-      master-machine-group: master
+      master-machine-group: swarm-master
       driver: swarm
-      image: registry.intra.weibo.com/icycrystal4/swarm:latest
+      image: registry.intra.weibo.com/icycrystal4/swarm:1027
       host: tcp://0.0.0.0:3376
-      discover: consul://101.200.173.242:8500/orginal
+      discovery: consul://101.200.173.242:8500/orginal
       strategy: spread
+      heartbeat: 15s
 
    descriptions:
        - group: icy-c-web

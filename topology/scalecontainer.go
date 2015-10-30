@@ -1,5 +1,5 @@
 package topology
 
-func (t *Topology) ScaleContainer() error {
+func (t *Topology) ScaleContainer(group string) error {
 	return nil
 }

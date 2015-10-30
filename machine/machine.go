@@ -3,10 +3,23 @@ package machine
 import (
 	"crypto/tls"
 	"strings"
+	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/machine/libmachine"
 	"github.com/docker/machine/state"
 )
+
+import "github.com/weibocom/dockerf/options"
+
+type MachineOptions struct {
+	DriverName string
+	Memory     int
+	Disk       int
+	Cpus       int
+
+	Options *options.Options
+}
 
 type MachineInfo struct {
 	Name      string
@@ -36,10 +49,11 @@ func (mi *MachineInfo) parseName() {
 	mi.Seq = seq
 }
 
-type State state.State
-
 type Machine struct {
-	Host *libmachine.Host
+	Host        *libmachine.Host
+	CachedState state.State
+	CachedIp    string
+	StopTime    time.Time
 }
 
 func (m *Machine) Name() string {
@@ -50,41 +64,71 @@ func (m *Machine) Id() string {
 	return ""
 }
 
-func (m *Machine) GetIP() (string, error) {
-	return m.Host.Driver.GetIP()
+func (m *Machine) GetCachedIp() string {
+	return m.CachedIp
 }
 
-func (m *Machine) State() (State, error) {
+func (m *Machine) LoadIp() (string, error) {
+	ip, err := m.Host.Driver.GetIP()
+	if err == nil {
+		m.CachedIp = ip
+	}
+	return ip, err
+}
+
+func (m *Machine) setCachedState(s state.State) {
+	if m.CachedState == state.Running && s != state.Running {
+		m.StopTime = time.Now()
+	}
+	m.CachedState = s
+}
+
+func (m *Machine) GetCachedState() state.State {
+	return m.CachedState
+}
+
+// this Method must be timeout-able
+func (m *Machine) LoadState() state.State {
 	s, err := m.Host.Driver.GetState()
-	return State(s), err
-}
-
-func (mi *Machine) IsRunning(s State) bool {
-	return s == State(state.Running)
-}
-
-func (m *Machine) Start() error {
-	s, err := m.State()
 	if err != nil {
-		return err
+		logrus.Errorf("loading machine '%s' state failed:%s", m.Name(), err.Error())
 	}
-	if m.IsRunning(s) {
-		return nil
+	m.setCachedState(s)
+	return s
+}
+
+// 1. start machine
+// 2. load ip and cache it
+// 3. load state and cache it
+func (m *Machine) Start() error {
+	err := m.Host.Start()
+	if err == nil {
+		m.setCachedState(state.Running)
+		if _, e := m.LoadIp(); e != nil {
+			logrus.Warnf("machine '%s' started, but ip loading failed: ", m.Name(), err.Error())
+		}
+	} else {
+		m.setCachedState(state.Error)
 	}
-	return m.Host.Start()
+	return err
 }
 
 func (m *Machine) Stop() error {
-	s, err := m.State()
-	if err != nil {
-		return err
+	err := m.Host.Stop()
+	if err == nil {
+		m.setCachedState(state.Stopped)
+	} else {
+		m.setCachedState(state.Error)
 	}
-	if !m.IsRunning(s) {
-		return nil
-	}
-	return m.Host.Stop()
+	return err
 }
 
 func (m *Machine) Remove() error {
-	return m.Host.Remove(false)
+	err := m.Host.Remove(false)
+	if err == nil {
+		m.setCachedState(state.None)
+	} else {
+		m.setCachedState(state.Error)
+	}
+	return err
 }

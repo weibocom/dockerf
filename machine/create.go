@@ -1,16 +1,29 @@
 package machine
 
 import (
+	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/docker/machine/libmachine"
 	"github.com/docker/machine/libmachine/auth"
 	"github.com/docker/machine/libmachine/engine"
 	"github.com/docker/machine/libmachine/swarm"
+	"github.com/docker/machine/state"
 	"github.com/docker/machine/utils"
+	"github.com/weibocom/dockerf/machine/options"
 )
 
-func (c *Cluster) Create(name, driverName string, d *MachineDesc) (*Machine, error) {
+func (c *Cluster) Create(name, driverName string, d *MachineOptions) (*Machine, error) {
+	if _, ok := c.machines[name]; ok {
+		return nil, fmt.Errorf("machine name '%s' exists, remove it first or provide another name.")
+	}
+	d.Options.Apply("engine-label", d.Options.String("engine-label")+" group="+d.Options.String("group"))
+
+	if err := options.RefreshOptions(driverName, d.Options); err != nil {
+		return nil, err
+	}
+
 	eo := getEngineOptions(d.Options)
 
 	eopts := engine.EngineOptions(*eo)
@@ -34,10 +47,12 @@ func (c *Cluster) Create(name, driverName string, d *MachineDesc) (*Machine, err
 		return nil, err
 	}
 	m := &Machine{
-		Host: host,
+		Host:     host,
+		StopTime: time.Now(),
 	}
 	c.Lock()
-	c.machines = append(c.machines, m)
+	m.setCachedState(state.Running)
+	c.machines[name] = m
 	c.Unlock()
 	return m, nil
 }
