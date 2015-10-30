@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/weibocom/dockerf/container/cluster"
@@ -16,13 +17,16 @@ const (
 )
 
 func main() {
+	logrus.SetLevel(logrus.DebugLevel)
 	path := "/Users/crystal/go/src/github.com/weibocom/dockerf/cluster-default.yml"
 	t, err := topology.NewTopology(path)
 	if err != nil {
 		fmt.Printf("Error:%s\n", err.Error())
-	} else {
-		fmt.Printf("Topology:%+v", *t)
+		return
 	}
+	t.ScaleMachine("all")
+
+	<-time.After(3 * time.Minute)
 	// // os.Setenv("debug", "true")
 	// // os.Setenv("DEBUG", "true")
 	// mc := getMachineCluster()
@@ -73,17 +77,11 @@ func addSlave(clu *cluster.Cluster, m *machine.Machine) {
 	logrus.Infof("add to slave")
 }
 
-func listMachines() {
-	c := getMachineCluster()
-	ms := c.List()
+func listMachines(c *machine.Cluster) {
+	ms := c.ListAll()
 	for _, m := range ms {
-		s, err := m.State()
-		if err != nil {
-			fmt.Printf("%s loading state error:%s\n", m.Name(), err.Error())
-		} else {
-			r := m.IsRunning(s)
-			fmt.Printf("name:%s\trunning:%t\n", m.Name(), r)
-		}
+		s := m.GetCachedState()
+		fmt.Printf("name:%s\tstate:%t\n", m.Name(), s.String())
 	}
 }
 
@@ -122,7 +120,7 @@ func createHost(cluster *machine.Cluster, name string) *machine.Machine {
 	opts["virtualbox-memory"] = "512"
 	opts["engine-label"] = "role=worker group=tomcat"
 	os.Setenv("VIRTUALBOX_DISK_SIZE", "5000")
-	md := &machine.MachineDesc{
+	md := &machine.MachineOptions{
 		Options: &options.Options{Values: opts},
 	}
 	m, err := cluster.Create(name, "virtualbox", md)

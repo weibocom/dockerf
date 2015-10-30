@@ -2,6 +2,7 @@ package container
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 )
 
 type DockerClient struct {
+	URL    string
 	client *dockerclient.DockerClient
 }
 
@@ -40,6 +42,7 @@ func NewDockerClientWithUrl(url string, m *machine.Machine) (*DockerClient, erro
 		return nil, err
 	}
 	return &DockerClient{
+		URL:    host,
 		client: client,
 	}, nil
 }
@@ -77,12 +80,14 @@ func (d *DockerClient) Run(desc *ContainerDesc, name string) (string, error) {
 		id  string
 	)
 	if id, err = d.client.CreateContainer(desc.ContainerConfig, name); err != nil {
-		if err != dockerclient.ErrNotFound {
+		if err != dockerclient.ErrImageNotFound {
 			return "", err
 		}
+		logrus.Debugf("image not found, try to pull image:%s url:%s", desc.ContainerConfig.Image, d.URL)
 		if err = d.Pull(desc.Image, nil); err != nil {
 			return "", err
 		}
+		logrus.Debugf("creating container image:%s, name:%s", desc.ContainerConfig.Image, name)
 		if id, err = d.client.CreateContainer(desc.ContainerConfig, name); err != nil {
 			return "", err
 		}
@@ -91,6 +96,7 @@ func (d *DockerClient) Run(desc *ContainerDesc, name string) (string, error) {
 	if err := d.client.StartContainer(id, &desc.HostConfig); err != nil {
 		return id, err
 	}
+	d.client.ContainerChanges(id)
 
 	return id, nil
 }
@@ -148,4 +154,25 @@ func (d *DockerClient) Stop(id string, force bool) error {
 		return err
 	}
 	return d.client.StopContainer(id, reqTimeout)
+}
+
+func (d *DockerClient) StartMonitorEvents(cb dockerclient.Callback, ec chan error, args ...interface{}) {
+	d.client.StartMonitorEvents(cb, ec, args...)
+}
+
+func (d *DockerClient) StopAllMonitorEvents() {
+	d.client.StopAllMonitorEvents()
+}
+
+func (d *DockerClient) IsAvailable() bool {
+	u, e := url.Parse(d.URL)
+	if e != nil {
+		return false
+	}
+	conn, e := net.Dial(u.Scheme, u.Host)
+	if e != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }

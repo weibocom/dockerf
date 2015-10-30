@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/weibocom/dockerf/container"
+	"github.com/weibocom/dockerf/events"
 	"github.com/weibocom/dockerf/machine"
 	"github.com/weibocom/dockerf/options"
 )
@@ -23,6 +24,7 @@ func init() {
 type Driver interface {
 	AddMaster(m *machine.Machine) error
 	AddWorker(m *machine.Machine) error
+	RegisterEventHandler(cb events.EventsHandler, args ...interface{})
 	Run(d *container.ContainerDesc, name string) (string, error)
 }
 

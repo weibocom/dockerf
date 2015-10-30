@@ -6,13 +6,12 @@ import (
 
 type Seq struct {
 	s int
+	sync.Mutex
 }
 
-var sLock sync.Mutex
-
 func (seq *Seq) Next() int {
-	sLock.Lock()
-	defer sLock.Unlock()
+	seq.Lock()
+	defer seq.Unlock()
 	seq.s++
 	return seq.s
 }
@@ -22,8 +21,8 @@ func (seq *Seq) Get() int {
 }
 
 func (seq *Seq) Max(m int) {
-	sLock.Lock()
-	defer sLock.Unlock()
+	seq.Lock()
+	defer seq.Unlock()
 	if m > seq.s {
 		seq.s = m
 	}
