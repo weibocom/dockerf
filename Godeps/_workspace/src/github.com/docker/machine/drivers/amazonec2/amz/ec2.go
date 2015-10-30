@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/docker/machine/log"
 	"github.com/docker/machine/utils"
@@ -140,7 +141,13 @@ func getDecodedResponse(r http.Response, into interface{}) error {
 }
 
 func NewEC2(auth Auth, region string) *EC2 {
-	endpoint := fmt.Sprintf("https://ec2.%s.amazonaws.com", region)
+	var endpoint string
+	if strings.HasPrefix(region, "cn-") {
+		endpoint = fmt.Sprintf("https://ec2.%s.amazonaws.com.cn", region)
+	} else {
+
+		endpoint = fmt.Sprintf("https://ec2.%s.amazonaws.com", region)
+	}
 	return &EC2{
 		Endpoint: endpoint,
 		Auth:     auth,
