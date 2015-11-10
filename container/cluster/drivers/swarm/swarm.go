@@ -27,7 +27,7 @@ type Driver struct {
 	startMonitorChan       chan bool // this chan can only write once, it will be close after read one ele from chan
 	eventHandler           events.EventsHandler
 	eventHandlerArgs       []interface{}
-	*sync.Mutex
+	sync.Mutex
 }
 
 const (
