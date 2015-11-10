@@ -52,6 +52,7 @@ func (c *Cluster) Create(name, driverName string, d *MachineOptions) (*Machine, 
 	}
 	c.Lock()
 	m.setCachedState(state.Running)
+	m.LoadIp()
 	c.machines[name] = m
 	c.Unlock()
 	return m, nil
