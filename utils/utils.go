@@ -57,7 +57,7 @@ Loop:
 			logrus.Debugf("tick-tock run interval timeout:%s. runs: %d, interval:%s, slap: %s, timeout:%s. ", desc, runs, interval, slap, timeout)
 			if slap > timeout {
 				if timeoutCallback != nil {
-					go timeoutCallback()
+					timeoutCallback()
 				}
 				logrus.Warnf("tick-tock run timeout:%s. runs: %d, interval:%s, slap: %s, timeout:%s. ", desc, runs, interval, slap, timeout)
 				break Loop
