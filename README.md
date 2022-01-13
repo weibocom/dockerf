@@ -9,7 +9,7 @@ DockerF: 一个基于云的Docker部署框架
 dockerf deploy --security=$sid -f $confs
 
 ``` yaml
-cluster-id: weibo-platform
+cluster-id: xxxxx-platform
 cloud-driver: aliyun
 pods:
    - feed:
@@ -18,11 +18,11 @@ pods:
         containers:
            - front-end:
                 num:1
-                image: registry.weibo.com/feed:latest
+                image: registry.xxxxx.com/feed:latest
                 command: bash
            - user-latest:
                 num:1
-                image: register.weibo.com/feed:stable
+                image: register.xxxxx.com/feed:stable
                 command: bash
 service-discovery:
    engine: etcd

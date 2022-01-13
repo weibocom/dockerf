@@ -50,7 +50,7 @@ machine:
 container:
    engine:
       install-url: https://get.daocloud.io/docker/
-      insecure-registry: registry.intra.weibo.com
+      insecure-registry: registry.intra.xxxxx.com
       storage-driver: aufs
       label:
       env:
@@ -59,7 +59,7 @@ container:
       master-machine-name: swarm-master
       master-machine-group: swarm-master
       driver: swarm
-      image: registry.intra.weibo.com/icycrystal4/swarm:1027
+      image: registry.intra.xxxxx.com/icycrystal4/swarm:1027
       host: tcp://0.0.0.0:3376
       discovery: consul://101.200.173.242:8500/orginal
       strategy: spread
@@ -70,7 +70,7 @@ container:
          port: 8080
          min-num: 1
          max-num: 1
-         image: registry.intra.weibo.com/icycrystal/tomcat
+         image: registry.intra.xxxxx.com/icycrystal/tomcat
          machine-group: frontend
          register: 
             driver: consul
