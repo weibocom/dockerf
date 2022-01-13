@@ -88,7 +88,7 @@ func listMachines(c *machine.Cluster) {
 func getContainerCluster(master *machine.Machine) *cluster.Cluster {
 	m := make(map[string]string)
 	// m["swarm-host"] = ":3376"
-	m["swarm-image"] = "registry.intra.xxxxx.com/icycrystal4/swarm:latest"
+	m["swarm-image"] = "registry.xxxxx.xxxxx.com/icycrystal4/swarm:latest"
 	m["swam-discover"] = "consul://101.200.173.242:8500/orginal"
 	options := options.Options{
 		Values: m,
@@ -104,7 +104,7 @@ func getContainerCluster(master *machine.Machine) *cluster.Cluster {
 func getMachineCluster() *machine.Cluster {
 	opts := make(map[string]string)
 	opts["debug"] = "true"
-	opts["engine-insecure-registry"] = "registry.intra.xxxxx.com"
+	opts["engine-insecure-registry"] = "registry.xxxxx.xxxxx.com"
 	opts["engine-storage-driver"] = "aufs"
 	// options["native-ssh"] = "true"
 	cluster, err := machine.NewCluster(&options.Options{Values: opts})
