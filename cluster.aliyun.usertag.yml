@@ -104,7 +104,7 @@ container:
        - group: usertag-frontend
          port: 40000~50000:8080
          num: 1
-         image: 123.57.88.212:5000/weibo_rd_user/user_tag:1.2-SNAPSHOT
+         image: 123.57.88.212:5000/xxxxx_rd_user/user_tag:1.2-SNAPSHOT
          prestop: touch ~/503  # execute some shell commands on the machine, not in container, before stop the service 
          poststart: touch ~/200
          restart: true
